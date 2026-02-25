@@ -69,6 +69,12 @@ const OPENAI_SYSTEM_PROMPT_AR = String(
 const OPENAI_SYSTEM_PROMPT_EN = String(
   process.env.OPENAI_SYSTEM_PROMPT_EN || ""
 ).trim();
+const OFF_TOPIC_REDIRECT_THRESHOLD = clampInteger(
+  process.env.ASSISTANT_OFF_TOPIC_REDIRECT_AFTER,
+  5,
+  100,
+  20
+);
 
 const IRAQI_DIALECT_TOKEN_MAP = {
   شنو: "ماذا",
@@ -307,6 +313,15 @@ const BOT_IDENTITY_KEYWORDS = [
   'what can you do',
   '\u0645\u0646\u0648 \u0627\u0646\u062a',
   '\u0634\u062a\u0643\u062f\u0631',
+];
+
+const BOT_AGE_KEYWORDS = [
+  'how old are you',
+  'what is your age',
+  'your age',
+  '\u0643\u0645 \u0639\u0645\u0631\u0643',
+  '\u0639\u0645\u0631\u0643 \u0634\u0643\u062f',
+  '\u0639\u0646\u062f\u0643 \u0639\u0645\u0631',
 ];
 
 const MOOD_CHITCHAT_KEYWORDS = [
@@ -640,6 +655,7 @@ function detectOffTopicTheme(normalizedText) {
   if (!normalizedText) return "none";
   if (containsAny(normalizedText, WEATHER_CHITCHAT_KEYWORDS)) return "weather";
   if (containsAny(normalizedText, JOKE_CHITCHAT_KEYWORDS)) return "joke";
+  if (containsAny(normalizedText, BOT_AGE_KEYWORDS)) return "bot_age";
   if (containsAny(normalizedText, BOT_IDENTITY_KEYWORDS)) return "bot_identity";
   if (containsAny(normalizedText, MOOD_CHITCHAT_KEYWORDS)) return "mood";
   return "general";
@@ -1157,6 +1173,7 @@ function mergeProfileSignals(profile, intent) {
   if (intent.orderIntent) next.counters.ordering += 1;
   if (intent.smallTalkType !== "none") next.conversation.smallTalkCount += 1;
   if (intent.offTopicIntent) next.conversation.offTopicCount += 1;
+  else next.conversation.offTopicCount = 0;
   if (intent.explicitLanguageSwitch) {
     next.languagePreference = intent.explicitLanguageSwitch;
   } else {
@@ -1815,47 +1832,138 @@ function pickSmartQuestion(intent, profile, lang, conversationModel = null) {
 }
 
 function tonePrefix(intent, lang) {
-  if (intent?.style === "formal") return tr(lang, "أكيد، ", "Certainly, ");
-  if (intent?.style === "playful") return tr(lang, "حلو 😄 ", "Nice 😄 ");
-  if (intent?.style === "rush") return tr(lang, "باختصار: ", "Quickly: ");
+  if (intent?.style === "formal") return tr(lang, "\u0623\u0643\u064a\u062f\u060c ", "Certainly, ");
+  if (intent?.style === "playful") return tr(lang, "\u062d\u0644\u0648 \ud83d\ude04 ", "Nice ");
+  if (intent?.style === "rush") return tr(lang, "\u0628\u0627\u062e\u062a\u0635\u0627\u0631: ", "Quickly: ");
   return "";
 }
 
-function buildOffTopicSnippet(intent, lang) {
-  const seed = `${intent.originalText}|${intent.normalizedText || ""}|${intent.offTopicTheme || "general"}`;
-  const ar = {
-    weather: "الجو يتغيّر بسرعة ببسماية، أقدر أرشّحلك خيارات أقرب وتوصيلها أسرع.",
-    joke: "حتى لو الجو يخربط، الطلب المضبوط يبقى مزاج 😄",
-    bot_identity: "أني مساعد تطبيق سوقي، شغلي أسهّل عليك الاختيار والطلب.",
-    mood: "تمام الحمدلله، شلونك إنت اليوم؟",
+function pickSeededMessage(items, seed, fallback = "") {
+  if (!Array.isArray(items) || !items.length) return fallback;
+  const index = simpleHash(String(seed || "seed")) % items.length;
+  return items[index] || fallback;
+}
+
+function shouldRedirectAfterOffTopic(intent, profile) {
+  if (!intent?.offTopicIntent) return false;
+  const count = Number(profile?.conversation?.offTopicCount || 0);
+  return count >= OFF_TOPIC_REDIRECT_THRESHOLD;
+}
+
+function buildOffTopicFollowUp(intent, lang, profile) {
+  const seed = `${intent.originalText}|${intent.offTopicTheme || "general"}|${
+    profile?.conversation?.offTopicCount || 0
+  }|follow`;
+  const followAr = {
+    weather: [
+      "\u0634\u0644\u0648\u0646 \u0627\u0644\u062c\u0648 \u0639\u0646\u062f\u0643\u0645 \u0647\u0633\u0647\u061f",
+      "\u062a\u062d\u0628 \u0646\u0628\u0642\u0649 \u0633\u0648\u0627\u0644\u0641 \u0634\u0648\u064a \u0644\u0648 \u0646\u0631\u062c\u0639 \u0644\u0644\u0637\u0644\u0628 \u0628\u0639\u062f\u064a\u0646\u061f",
+    ],
+    joke: [
+      "\u062a\u0631\u064a\u062f \u0646\u0643\u062a\u0629 \u062b\u0627\u0646\u064a\u0629 \u0644\u0648 \u0646\u063a\u064a\u0631 \u0627\u0644\u0645\u0648\u0636\u0648\u0639\u061f",
+      "\u062d\u0644\u0648\u060c \u0643\u0645\u0644\u0647\u0627 \u062f\u0631\u062f\u0634\u0629\u061f",
+    ],
+    bot_identity: [
+      "\u0623\u0643\u062f\u0631 \u0623\u0633\u0627\u0639\u062f\u0643 \u0628\u0627\u0644\u0627\u0642\u062a\u0631\u0627\u062d \u0623\u0648 \u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0637\u0644\u0628\u060c \u0623\u064a \u0648\u062d\u062f\u0629 \u062a\u0631\u064a\u062f\u061f",
+      "\u062a\u062d\u0628 \u0623\u0648\u0631\u064a\u0643 \u0634\u0644\u0648\u0646 \u0623\u0631\u062a\u0628 \u0627\u0644\u0637\u0644\u0628 \u0648\u064a\u0627\u0643 \u062e\u0637\u0648\u0629 \u062e\u0637\u0648\u0629\u061f",
+    ],
+    bot_age: [
+      "\u0625\u0630\u0627 \u062d\u0628\u064a\u062a \u0625\u0633\u0623\u0644\u0646\u064a \u0623\u064a \u0634\u064a \u062b\u0627\u0646\u064a \u0648\u0623\u0646\u0627 \u0623\u062c\u0627\u0648\u0628\u0643 \u0628\u0648\u0636\u0648\u062d.",
+      "\u0623\u0646\u0627 \u0648\u064a\u0627\u0643\u060c \u0627\u0633\u0623\u0644 \u0627\u0644\u0644\u064a \u062a\u0631\u064a\u062f.",
+    ],
+    mood: [
+      "\u0623\u0646\u062a \u0634\u0644\u0648\u0646 \u064a\u0648\u0645\u0643 \u0644\u062d\u062f \u0627\u0644\u0622\u0646\u061f",
+      "\u0634\u0627\u0643\u0648 \u0645\u0648\u062f\u0643 \u0627\u0644\u064a\u0648\u0645\u061f",
+    ],
     general: [
-      "سوالفك حلوة، ومن تجهز نرتبلك طلب مضبوط بسرعة.",
-      "تمام وياك، وبنفس الوقت أكدر أساعدك تختار طلب يناسبك.",
-      "أحب الأجواء الحلوة، ومن تكتبلي مزاجك أطلعلك خيارات دقيقة.",
+      "\u0627\u062d\u0686\u064a\u0644\u064a \u0627\u0644\u0644\u064a \u0628\u0628\u0627\u0644\u0643 \u0648\u0623\u0646\u0627 \u0648\u064a\u0627\u0643.",
+      "\u062a\u0643\u062f\u0631 \u062a\u0643\u0645\u0644 \u062f\u0631\u062f\u0634\u0629\u060c \u0623\u0646\u0627 \u0645\u062a\u0627\u0628\u0639 \u0648\u064a\u0627\u0643.",
+      "\u062a\u0645\u0627\u0645\u060c \u0627\u062d\u0686\u064a \u0628\u0631\u0627\u062d\u062a\u0643.",
+    ],
+  };
+  const followEn = {
+    weather: [
+      "How is the weather on your side now?",
+      "Want to keep chatting a bit, then order later?",
+    ],
+    joke: ["Want another joke or a different topic?", "Nice, should we keep chatting?"],
+    bot_identity: [
+      "I can help with suggestions or order tracking. Which one do you want?",
+      "Do you want a quick walkthrough for how I help inside the app?",
+    ],
+    bot_age: [
+      "Ask me anything else and I will answer clearly.",
+      "I am here with you. Ask what you want.",
+    ],
+    mood: ["How is your day going so far?", "What mood are you in today?"],
+    general: [
+      "Tell me what is on your mind.",
+      "We can keep chatting, I am listening.",
+      "Sure, go ahead.",
+    ],
+  };
+
+  if (lang === "en") {
+    const list = followEn[intent.offTopicTheme] || followEn.general;
+    return pickSeededMessage(list, seed, "");
+  }
+  const list = followAr[intent.offTopicTheme] || followAr.general;
+  return pickSeededMessage(list, seed, "");
+}
+
+function buildOrderRedirectLine(lang) {
+  return tr(
+    lang,
+    "\u0635\u0627\u0631\u0644\u0646\u0627 \u0634\u0648\u064a \u062e\u0627\u0631\u062c \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0637\u0644\u0628\u060c \u0634\u0631\u0627\u064a\u0643 \u0647\u0633\u0647 \u0646\u0631\u062c\u0639 \u0648\u0623\u062e\u062a\u0627\u0631 \u0637\u0644\u0628 \u0645\u0646\u0627\u0633\u0628\u061f",
+    "We have been off-topic for a while. Want to get back and choose an order now?"
+  );
+}
+
+function buildOffTopicSnippet(intent, lang) {
+  const seed = `${intent.originalText}|${intent.normalizedText || ""}|${
+    intent.offTopicTheme || "general"
+  }`;
+  const ar = {
+    weather:
+      "\u062c\u0648 \u0628\u0633\u0645\u0627\u064a\u0629 \u064a\u062a\u063a\u064a\u0631 \u0628\u0633\u0631\u0639\u0629 \u0647\u0627\u0644\u0623\u064a\u0627\u0645.",
+    joke:
+      "\u0623\u0643\u064a\u062f \ud83d\ude04 \u0646\u0643\u062a\u0629 \u0633\u0631\u064a\u0639\u0629: \u0644\u064a\u0634 \u0627\u0644\u0637\u0644\u0628 \u064a\u062d\u0628 \u0627\u0644\u0633\u0631\u0639\u0629\u061f \u062d\u062a\u0649 \u064a\u0644\u062d\u0642 \u0648\u0647\u0648 \u0633\u062e\u0646.",
+    bot_identity:
+      "\u0623\u0646\u0627 \u0645\u0633\u0627\u0639\u062f\u0643 \u062f\u0627\u062e\u0644 \u0627\u0644\u062a\u0637\u0628\u064a\u0642\u060c \u0623\u0633\u0627\u0639\u062f\u0643 \u062a\u062e\u062a\u0627\u0631 \u0623\u0641\u0636\u0644 \u0627\u0644\u0645\u0637\u0627\u0639\u0645 \u0648\u0623\u0646\u0638\u0645 \u0627\u0644\u0637\u0644\u0628 \u0648\u064a\u0627\u0643.",
+    bot_age:
+      "\u0623\u0646\u0627 \u0630\u0643\u0627\u0621 \u0627\u0635\u0637\u0646\u0627\u0639\u064a \u062f\u0627\u062e\u0644 \u0627\u0644\u062a\u0637\u0628\u064a\u0642\u060c \u0645\u0627 \u0639\u0646\u062f\u064a \u0639\u0645\u0631 \u0645\u062b\u0644 \u0627\u0644\u0628\u0634\u0631.",
+    mood:
+      "\u062a\u0645\u0627\u0645 \u0627\u0644\u062d\u0645\u062f \u0644\u0644\u0647\u060c \u0623\u0646\u062a \u0634\u0644\u0648\u0646\u0643 \u0627\u0644\u064a\u0648\u0645\u061f",
+    general: [
+      "\u0645\u0645\u062a\u0627\u0632\u060c \u0627\u062d\u0686\u064a \u0628\u0631\u0627\u062d\u062a\u0643 \u0648\u0623\u0646\u0627 \u0648\u064a\u0627\u0643.",
+      "\u062d\u0644\u0648\u060c \u0623\u062d\u0628 \u0627\u0644\u062f\u0631\u062f\u0634\u0629 \u0627\u0644\u0637\u0628\u064a\u0639\u064a\u0629.",
+      "\u062a\u0645\u0627\u0645\u060c \u062e\u0630 \u0631\u0627\u062d\u062a\u0643 \u0628\u0627\u0644\u0643\u0644\u0627\u0645.",
     ],
   };
   const en = {
-    weather: "Weather keeps changing, so I can suggest closer options with quicker delivery.",
-    joke: "Quick one: good food always improves the mood 😄",
-    bot_identity: "I am Souqi in-app assistant, focused on smart ordering choices.",
+    weather: "Bismayah weather shifts quickly these days.",
+    joke: "Sure, quick one: why do hot meals travel fast? so they arrive hot.",
+    bot_identity:
+      "I am your in-app assistant. I help you choose better places and organize your order.",
+    bot_age: "I am an AI assistant, so I do not have a human age.",
     mood: "I am good, thanks. How are you today?",
     general: [
-      "I enjoy the chat, and once you are ready I can rank precise options fast.",
-      "All good, and I can still help you decide the right order when you are ready.",
-      "Nice vibe. Share your mood any time and I will shape the best options.",
+      "Nice, feel free to chat and take your time.",
+      "All good, I am here with you.",
+      "Great vibe. Tell me what is on your mind.",
     ],
   };
   if (lang === "en") {
     const snippet = en[intent.offTopicTheme] || en.general;
     if (Array.isArray(snippet)) {
-      return snippet[simpleHash(seed) % snippet.length];
+      return pickSeededMessage(snippet, `${seed}|en`);
     }
     return snippet;
   }
 
   const snippet = ar[intent.offTopicTheme] || ar.general;
   if (Array.isArray(snippet)) {
-    return snippet[simpleHash(seed) % snippet.length];
+    return pickSeededMessage(snippet, `${seed}|ar`);
   }
   return snippet;
 }
@@ -1870,54 +1978,46 @@ function buildSmallTalkReply({
   lang,
 }) {
   const model = normalizeConversationModel(conversationModel || profile?.conversationModel);
-  let intro = tr(lang, "هلا بيك 🌟", "Hey there 🌟");
+  let intro = tr(
+    lang,
+    "\u0647\u0644\u0627 \u0628\u064a\u0643 \ud83c\udf1f",
+    "Hey there"
+  );
   if (intent.smallTalkType === "greeting") {
     intro = tr(
       lang,
-      "هلا بيك 🌟 شلونك اليوم؟ تحب أشوفلك عروض اليوم لو أختارلك مطعم حسب مزاجك؟",
-      "Hey 🌟 how are you today? Want today's offers or a mood-based recommendation?"
+      "\u0647\u0644\u0627 \u0628\u064a\u0643 \ud83c\udf1f \u0634\u0644\u0648\u0646\u0643 \u0627\u0644\u064a\u0648\u0645\u061f",
+      "Hey, how are you today?"
     );
   } else if (intent.smallTalkType === "thanks") {
-    intro = tr(lang, "تدلل 🙏", "You are welcome 🙏");
+    intro = tr(
+      lang,
+      "\u062a\u062f\u0644\u0644 \ud83d\ude4f",
+      "You are welcome"
+    );
   } else if (intent.smallTalkType === "chitchat" || intent.offTopicIntent) {
     intro = buildOffTopicSnippet(intent, lang);
   }
 
-  const quickHint = merchants.length
-    ? tr(
-        lang,
-        `أقرب ترشيح عندي هسه: ${merchants[0].merchantName}.`,
-        `Best current match: ${merchants[0].merchantName}.`
-      )
-    : tr(
-        lang,
-        "من تحدد شتريد أرتبلك الخيارات فوراً.",
-        "Once you tell me what you want, I will rank the best options instantly."
-      );
+  const redirectNow = shouldRedirectAfterOffTopic(intent, profile);
+  if (redirectNow) {
+    const followQuestion =
+      conversationDecision?.mode === "discovery"
+        ? pickScenarioQuestion(
+            conversationDecision.missingSlot || nextMissingSlot(model) || "cuisine",
+            lang,
+            `${intent.originalText}|${model.turns}|${model.clarificationTurns}|smalltalk_redirect`
+          )
+        : pickSmartQuestion(intent, profile, lang, model);
+    return `${intro} ${buildOrderRedirectLine(lang)} ${followQuestion}`.trim();
+  }
 
-  const productHint = products.length > 0
-    ? tr(
-        lang,
-        `مثال سريع: ${products[0].productName} بسعر ${formatIqd(products[0].effectivePrice)}.`,
-        `Quick example: ${products[0].productName} at ${formatIqd(products[0].effectivePrice)}.`
-      )
-    : "";
+  if (intent.smallTalkType === "thanks") {
+    return intro;
+  }
 
-  const transitionLine = tr(
-    lang,
-    "إذا تحب نكمل سوالف أكيد، وبمجرد تحب تطلب أنا حاضر.",
-    "We can keep chatting, and whenever you want to order I am ready."
-  );
-  const followQuestion =
-    conversationDecision?.mode === "discovery"
-      ? pickScenarioQuestion(
-          conversationDecision.missingSlot || nextMissingSlot(model) || "cuisine",
-          lang,
-          `${intent.originalText}|${model.turns}|${model.clarificationTurns}|smalltalk`
-        )
-      : pickSmartQuestion(intent, profile, lang, model);
-
-  return `${intro} ${quickHint} ${productHint} ${transitionLine} ${followQuestion}`.trim();
+  const freeChatFollow = buildOffTopicFollowUp(intent, lang, profile);
+  return `${intro}${freeChatFollow ? ` ${freeChatFollow}` : ""}`.trim();
 }
 
 function summarizeRecentContext(recentMessages, lang) {
@@ -1989,6 +2089,113 @@ function buildHistoricalMemoryContext(historyMessages, intent, lang) {
   return { line, snippets };
 }
 
+function escapeRegExp(text) {
+  return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function tokenSetSimilarity(leftText, rightText) {
+  const leftTokens = new Set(tokenize(leftText));
+  const rightTokens = new Set(tokenize(rightText));
+  if (!leftTokens.size || !rightTokens.size) return 0;
+
+  let overlap = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) overlap += 1;
+  }
+  const base = Math.max(leftTokens.size, rightTokens.size, 1);
+  return overlap / base;
+}
+
+function isNearDuplicateReply(candidateText, recentReplies = []) {
+  const normalizedCandidate = normalizeForNlp(candidateText);
+  if (!normalizedCandidate) return false;
+
+  for (const prev of recentReplies || []) {
+    const normalizedPrev = normalizeForNlp(prev);
+    if (!normalizedPrev) continue;
+    if (normalizedPrev === normalizedCandidate) return true;
+
+    const minLen = Math.min(normalizedPrev.length, normalizedCandidate.length);
+    const maxLen = Math.max(normalizedPrev.length, normalizedCandidate.length);
+    if (
+      minLen >= 12 &&
+      maxLen > 0 &&
+      (normalizedPrev.includes(normalizedCandidate) ||
+        normalizedCandidate.includes(normalizedPrev)) &&
+      minLen / maxLen >= 0.82
+    ) {
+      return true;
+    }
+
+    if (tokenSetSimilarity(normalizedPrev, normalizedCandidate) >= 0.86) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function sanitizeAssistantOutput(text, { intent = null, recentAssistantReplies = [] } = {}) {
+  const source = String(text || "").replace(/\r/g, "").trim();
+  if (!source) return "";
+
+  const userTextRaw = String(intent?.originalText || "").trim();
+  const userTextNormalized = normalizeForNlp(userTextRaw);
+  const blockedStarts = [
+    "last request:",
+    "last two requests:",
+    "based on your previous chats:",
+    "\u0622\u062e\u0631 \u0637\u0644\u0628:",
+    "\u0622\u062e\u0631 \u0637\u0644\u0628\u064a\u0646:",
+    "\u0627\u0639\u062a\u0645\u0627\u062f\u0627 \u0639\u0644\u0649 \u0645\u062d\u0627\u062f\u062b\u0627\u062a\u0643 \u0627\u0644\u0633\u0627\u0628\u0642\u0629:",
+    "user message:",
+    "you said:",
+  ].map((item) => normalizeForNlp(item));
+
+  const rawLines = source
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const filtered = [];
+
+  for (const line of rawLines) {
+    const normalizedLine = normalizeForNlp(line);
+    if (!normalizedLine) continue;
+    if (blockedStarts.some((prefix) => prefix && normalizedLine.startsWith(prefix))) continue;
+
+    if (userTextNormalized && userTextNormalized.length >= 8) {
+      if (normalizedLine === userTextNormalized) continue;
+      if (
+        userTextNormalized.split(" ").length >= 3 &&
+        normalizedLine.includes(userTextNormalized)
+      ) {
+        continue;
+      }
+    }
+
+    if (userTextRaw.length >= 8 && line.includes(userTextRaw)) continue;
+    filtered.push(line);
+  }
+
+  let cleaned = (filtered.length ? filtered : rawLines).join("\n").trim();
+  if (!cleaned) return "";
+
+  if (userTextRaw.length >= 10) {
+    cleaned = cleaned.replace(new RegExp(escapeRegExp(userTextRaw), "gi"), "").trim();
+  }
+  cleaned = cleaned
+    .replace(/^(user|assistant)\s*:\s*/gi, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+  if (!cleaned) return "";
+
+  if (isNearDuplicateReply(cleaned, recentAssistantReplies)) {
+    return "";
+  }
+
+  return cleaned.slice(0, 1800);
+}
+
 function compactLlmMerchant(merchant) {
   return {
     name: merchant.merchantName,
@@ -2024,24 +2231,28 @@ function buildLlmSystemPrompt(lang) {
     return [
       `You are ${OPENAI_ASSISTANT_NAME}, in-app ordering assistant for Bismayah.`,
       "Reply naturally, warmly, and practically.",
-      "Use app data only. Never invent unavailable restaurants, offers, or ETA.",
+      "Use app data only. Never invent unavailable restaurants, offers, ETA, or ratings.",
+      "Never quote or repeat the user's message verbatim.",
       "When data is missing, ask one smart follow-up question only.",
-      "Do not push ordering too early; understand the user first.",
-      "If user is off-topic, answer briefly then gently return to ordering help.",
-      "Avoid repeating the same opening phrase between turns.",
+      "Allow free small talk naturally. Do not force ordering too early.",
+      "If off-topic count is below 20, keep the conversation natural without hard redirection.",
+      "If off-topic count reaches 20 or more, gently steer back to ordering.",
+      "Vary openings and avoid repetitive wording.",
       "Keep answer concise (2-6 lines), no markdown.",
     ].join(" ");
   }
 
   return [
-    `أنت ${OPENAI_ASSISTANT_NAME} داخل تطبيق سوقي في بسماية.`,
-    "ردك يكون طبيعي ولهجة عراقية بسيطة ومريحة.",
-    "لا تخترع عروض أو مطاعم أو أوقات توصيل غير موجودة بالبيانات.",
-    "إذا البيانات ناقصة اسأل سؤال ذكي واحد فقط.",
-    "لا تدفع المستخدم للطلب بسرعة؛ افهمه أولاً ثم اقترح.",
-    "إذا المستخدم خارج الموضوع جاوبه باختصار ثم ارجعه بلطف لطلب الأكل.",
-    "تجنب تكرار نفس مقدمة الجملة بكل رد.",
-    "الإجابة قصيرة وواضحة من 2 إلى 6 أسطر وبدون تنسيق ماركداون.",
+    `\u0623\u0646\u062a ${OPENAI_ASSISTANT_NAME} \u062f\u0627\u062e\u0644 \u062a\u0637\u0628\u064a\u0642 \u0633\u0648\u0642\u064a \u0641\u064a \u0628\u0633\u0645\u0627\u064a\u0629.`,
+    "\u0631\u062f\u0643 \u064a\u0643\u0648\u0646 \u0637\u0628\u064a\u0639\u064a \u0648\u0644\u0647\u062c\u0629 \u0639\u0631\u0627\u0642\u064a\u0629 \u0628\u0633\u064a\u0637\u0629 \u0648\u0645\u0631\u064a\u062d\u0629.",
+    "\u0644\u0627 \u062a\u062e\u062a\u0631\u0639 \u0628\u064a\u0627\u0646\u0627\u062a \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629 \u0641\u064a \u0627\u0644\u062a\u0637\u0628\u064a\u0642.",
+    "\u0645\u0645\u0646\u0648\u0639 \u062a\u0643\u0631\u0627\u0631 \u0646\u0635 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u062d\u0631\u0641\u064a\u0627\u064b \u0641\u064a \u0627\u0644\u0631\u062f.",
+    "\u0625\u0630\u0627 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0646\u0627\u0642\u0635\u0629 \u0627\u0633\u0623\u0644 \u0633\u0624\u0627\u0644 \u0648\u0627\u062d\u062f \u0630\u0643\u064a \u0641\u0642\u0637.",
+    "\u062e\u0644\u064a \u0627\u0644\u062f\u0631\u062f\u0634\u0629 \u062d\u0631\u0629 \u0648\u0637\u0628\u064a\u0639\u064a\u0629\u060c \u0648\u0644\u0627 \u062a\u062f\u0641\u0639 \u0644\u0644\u0637\u0644\u0628 \u0628\u0633\u0631\u0639\u0629.",
+    "\u0627\u0630\u0627 \u0639\u062f\u062f \u0631\u0633\u0627\u0626\u0644 \u062e\u0627\u0631\u062c \u0627\u0644\u0637\u0644\u0628 \u0627\u0642\u0644 \u0645\u0646 20\u060c \u0643\u0645\u0644 \u0627\u0644\u062f\u0631\u062f\u0634\u0629 \u0628\u0634\u0643\u0644 \u0637\u0628\u064a\u0639\u064a.",
+    "\u0627\u0630\u0627 \u0648\u0635\u0644\u062a 20 \u0631\u0633\u0627\u0644\u0629 \u062e\u0627\u0631\u062c \u0627\u0644\u0637\u0644\u0628\u060c \u0627\u0631\u062c\u0639 \u0628\u0644\u0637\u0641 \u0644\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0637\u0644\u0628.",
+    "\u062c\u0646\u0628 \u0627\u0644\u062a\u0643\u0631\u0627\u0631 \u0648\u063a\u064a\u0631 \u0628\u062f\u0627\u064a\u0629 \u0627\u0644\u062c\u0645\u0644\u0629 \u0641\u064a \u0643\u0644 \u0631\u062f.",
+    "\u0627\u0644\u0625\u062c\u0627\u0628\u0629 \u0642\u0635\u064a\u0631\u0629 \u0648\u0648\u0627\u0636\u062d\u0629 \u0645\u0646 2 \u0627\u0644\u0649 6 \u0627\u0633\u0637\u0631 \u0648\u0628\u062f\u0648\u0646 markdown.",
   ].join(" ");
 }
 
@@ -2082,6 +2293,11 @@ async function maybeBuildOpenAiReply({
       speedPriority: profile.speedPriority || "balanced",
       qualityPriority: profile.qualityPriority || "balanced",
       preferredCuisines: (profile.preferredCuisines || []).slice(0, 6),
+      personalityStyle: profile.personalityStyle || "neutral",
+      conversation: {
+        offTopicCount: Number(profile?.conversation?.offTopicCount || 0),
+        smallTalkCount: Number(profile?.conversation?.smallTalkCount || 0),
+      },
     },
     recentContext,
     historicalMemory: historicalMemory?.snippets || [],
@@ -2122,6 +2338,13 @@ async function maybeBuildOpenAiReply({
             : "جاوب بالعربية العراقية ما لم يطلب المستخدم الإنجليزية بشكل صريح."
           : "Use the language that best matches user input.",
       },
+      {
+        role: "system",
+        content:
+          Number(profile?.conversation?.offTopicCount || 0) >= OFF_TOPIC_REDIRECT_THRESHOLD
+            ? "User has many off-topic turns; answer naturally then gently steer back to ordering."
+            : "Keep small talk natural and do not force ordering immediately.",
+      },
       { role: "user", content: JSON.stringify(payload) },
     ];
 
@@ -2154,12 +2377,13 @@ async function maybeBuildOpenAiReply({
         const json = await response.json();
         const content = String(json?.choices?.[0]?.message?.content || "").trim();
         if (!content) continue;
-        const normalizedContent = normalizeForNlp(content);
-        const repeated = (recentAssistantReplies || []).some(
-          (line) => normalizeForNlp(line || "") === normalizedContent
-        );
-        if (repeated) continue;
-        return content.slice(0, 1800);
+        const cleaned = sanitizeAssistantOutput(content, {
+          intent,
+          recentAssistantReplies,
+        });
+        if (!cleaned) continue;
+        if (isNearDuplicateReply(cleaned, recentAssistantReplies)) continue;
+        return cleaned.slice(0, 1800);
       }
     }
 
@@ -2501,7 +2725,7 @@ function buildIntentAwareReply({
   }
 
   if (intent.offTopicIntent || intent.smallTalkType !== "none") {
-    const smallTalk = buildSmallTalkReply({
+    return buildSmallTalkReply({
       intent,
       profile,
       merchants,
@@ -2510,10 +2734,6 @@ function buildIntentAwareReply({
       conversationDecision,
       lang,
     });
-    if (historicalMemoryLine) {
-      return `${smallTalk}\n${historicalMemoryLine}`;
-    }
-    return smallTalk;
   }
 
   if (conversationDecision?.mode === "discovery") {
@@ -2552,8 +2772,7 @@ function buildIntentAwareReply({
     const itemText = firstItem
       ? `${firstItem.productName} x${firstItem.quantity}`
       : tr(lang, "أصناف مناسبة", "matched items");
-    const contextLine = recentContext ? `${recentContext}\n` : "";
-    return `${contextLine}${tr(
+    return `${tr(
       lang,
       `جهزت مسودة طلب من ${draft.merchantName} بمحتوى ${itemText}.`,
       `I prepared a draft from ${draft.merchantName} including ${itemText}.`
@@ -2565,20 +2784,17 @@ function buildIntentAwareReply({
       lang,
       "ما حصلت مطابقة قوية هسه. إذا تحددلي النوع أو الميزانية أضبطها بسرعة.",
       "I could not find strong matches yet. I can improve results fast if you set budget or food type."
-    )} ${historicalMemoryLine ? `\n${historicalMemoryLine}` : ""} ${pickSmartQuestion(
+    )} ${pickSmartQuestion(
       intent,
       profile,
       lang,
       conversationModel
     )}`;
   }
-
-  const contextLine = recentContext ? `${recentContext}\n` : "";
-  const memoryLine = historicalMemoryLine ? `${historicalMemoryLine}\n` : "";
   const lines = buildRecommendationLines(merchants, intent, lang);
   const intro = tr(lang, "رتبتلك أفضل 3 خيارات:", "I ranked the top 3 options for your request:");
   const followUp = pickSmartQuestion(intent, profile, lang, conversationModel);
-  return `${contextLine}${memoryLine}${intro}\n${lines.join("\n")}\n${followUp}`;
+  return `${intro}\n${lines.join("\n")}\n${followUp}`;
 }
 
 function buildAssistantReply(args) {
@@ -3154,7 +3370,7 @@ export async function chat(customerUserId, dto) {
 
   const profile = mergeProfileSignals(parseProfile(rawProfile), intent);
   profile.conversationModel = mergeConversationModel(profile, intent);
-  const conversationDecision = decideConversationMode({
+  let conversationDecision = decideConversationMode({
     intent,
     model: profile.conversationModel,
   });
@@ -3173,6 +3389,33 @@ export async function chat(customerUserId, dto) {
     .map((msg) => msg.text.trim())
     .filter((text) => text.length >= 2)
     .slice(-3);
+  const sessionUserTurns = (recentMessages || []).filter(
+    (msg) => msg.role === "user"
+  ).length;
+  const hasStrongOrderStart =
+    intent.orderIntent ||
+    intent.confirmIntent ||
+    intent.cancelIntent ||
+    intent.wantsCheap ||
+    intent.wantsTopRated ||
+    intent.wantsFreeDelivery ||
+    intent.wantsFast ||
+    intent.primaryIntent === "ORDER_DIRECT";
+  const shouldForceDiscoveryOnFreshSession =
+    sessionUserTurns <= 1 &&
+    !hasStrongOrderStart &&
+    !intent.supportIntent &&
+    !intent.comparisonIntent &&
+    intent.smallTalkType === "none" &&
+    !intent.offTopicIntent;
+  if (shouldForceDiscoveryOnFreshSession) {
+    conversationDecision = {
+      mode: "discovery",
+      ready: false,
+      missingSlot: pickNextMissingSlot(profile.conversationModel),
+      filled: conversationCoreFilledCount(profile.conversationModel),
+    };
+  }
   const historicalMemory = buildHistoricalMemoryContext(
     historicalMessages,
     intent,
@@ -3271,20 +3514,34 @@ export async function chat(customerUserId, dto) {
     lang,
   });
 
-  const llmReply = await maybeBuildOpenAiReply({
-    intent,
-    profile,
-    lang,
-    recentContext,
-    historicalMemory,
-    merchants: visibleMerchants,
-    products: visibleProducts,
-    conversationDecision,
-    recentAssistantReplies,
-    draft: createdDraft,
-    createdOrder: null,
-  });
-  const assistantText = llmReply || ruleBasedReply;
+  const shouldBypassLlmForNaturalFlow =
+    (conversationDecision.mode === "discovery" && sessionUserTurns <= 2) ||
+    ((intent.offTopicIntent || intent.smallTalkType !== "none") &&
+      Number(profile?.conversation?.offTopicCount || 0) < OFF_TOPIC_REDIRECT_THRESHOLD);
+  const llmReply = shouldBypassLlmForNaturalFlow
+    ? null
+    : await maybeBuildOpenAiReply({
+        intent,
+        profile,
+        lang,
+        recentContext,
+        historicalMemory,
+        merchants: visibleMerchants,
+        products: visibleProducts,
+        conversationDecision,
+        recentAssistantReplies,
+        draft: createdDraft,
+        createdOrder: null,
+      });
+  const rawAssistantText = llmReply || ruleBasedReply;
+  const assistantText =
+    sanitizeAssistantOutput(rawAssistantText, { intent, recentAssistantReplies }) ||
+    sanitizeAssistantOutput(ruleBasedReply, { intent, recentAssistantReplies }) ||
+    tr(
+      lang,
+      "\u062d\u0627\u0636\u0631 \u0648\u064a\u0627\u0643. \u0625\u0630\u0627 \u062a\u0631\u064a\u062f \u0646\u0643\u0645\u0644 \u0627\u0644\u062f\u0631\u062f\u0634\u0629 \u0623\u0648 \u0646\u0628\u062f\u0623 \u0627\u0644\u0637\u0644\u0628\u060c \u0623\u0646\u0627 \u062c\u0627\u0647\u0632.",
+      "I am with you. We can continue chatting or start your order anytime."
+    );
 
   const summaryText = buildConversationSummaryText({
     intent,
