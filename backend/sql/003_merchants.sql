@@ -1,6 +1,12 @@
 BEGIN;
 
-CREATE TYPE merchant_type AS ENUM ('restaurant', 'market');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'merchant_type') THEN
+    CREATE TYPE merchant_type AS ENUM ('restaurant', 'market');
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS merchant (
   id              BIGSERIAL PRIMARY KEY,
