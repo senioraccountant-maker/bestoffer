@@ -425,6 +425,9 @@ class _OrderStatusTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     try {
       final progress = _buildProgress(order);
+      final isCancelled = order.status == 'cancelled';
+      final isDelivered = order.status == 'delivered';
+      final showLiveTracking = !isCancelled && !isDelivered;
 
       const steps = <_TimelineStep>[
         _TimelineStep(
@@ -496,27 +499,28 @@ class _OrderStatusTimeline extends StatelessWidget {
                   for (var i = 0; i < steps.length; i++) ...[
                     _TimelineChip(
                       step: steps[i],
-                      done: safeDoneFlags[i] && order.status != 'cancelled',
+                      done: safeDoneFlags[i] && !isCancelled,
                       active:
                           i == progress.activeIndex &&
-                          order.status != 'cancelled' &&
+                          !isCancelled &&
                           !safeDoneFlags.last,
                     ),
                     if (i < steps.length - 1)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Icon(
-                          Icons.arrow_left_rounded,
-                          color: safeDoneFlags[i]
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.white54,
-                        ),
+                      _TimelineConnector(
+                        done: safeDoneFlags[i] && !isCancelled,
+                        active: showLiveTracking && i == progress.activeIndex,
                       ),
                   ],
                 ],
               ),
             ),
           ),
+          if (showLiveTracking) ...[
+            const SizedBox(height: 8),
+            _OrderTrackingLoadingBar(
+              currentStepLabel: steps[progress.activeIndex].label,
+            ),
+          ],
         ],
       );
     } catch (_) {
@@ -534,6 +538,95 @@ class _OrderStatusTimeline extends StatelessWidget {
         ),
       );
     }
+  }
+}
+
+class _TimelineConnector extends StatelessWidget {
+  final bool done;
+  final bool active;
+
+  const _TimelineConnector({required this.done, required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = Theme.of(context).colorScheme.primary;
+    final color = done
+        ? activeColor
+        : active
+        ? activeColor.withValues(alpha: 0.86)
+        : Colors.white54;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: active
+              ? activeColor.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Icon(
+          Icons.arrow_left_rounded,
+          textDirection: TextDirection.ltr,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderTrackingLoadingBar extends StatelessWidget {
+  final String currentStepLabel;
+
+  const _OrderTrackingLoadingBar({required this.currentStepLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.cyan.withValues(alpha: 0.08),
+        border: Border.all(color: Colors.cyan.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            textDirection: TextDirection.rtl,
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'جاري تحديث حالة الطلب...',
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: const LinearProgressIndicator(minHeight: 5),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'المرحلة الحالية: $currentStepLabel',
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -583,6 +676,17 @@ class _TimelineChip extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(step.label, style: const TextStyle(fontSize: 12)),
+          if (active && !done) ...[
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.8,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
         ],
       ),
     );
