@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,8 +41,8 @@ class _AssistantChatScreenState extends ConsumerState<AssistantChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollCtrl.hasClients) return;
       _scrollCtrl.animateTo(
-        _scrollCtrl.position.maxScrollExtent + 140,
-        duration: const Duration(milliseconds: 260),
+        _scrollCtrl.position.maxScrollExtent + 160,
+        duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
       );
     });
@@ -94,7 +96,7 @@ class _AssistantChatScreenState extends ConsumerState<AssistantChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المساعد الذكي'),
+        title: const Text('مساعد الطلب الذكي'),
         actions: [
           IconButton(
             tooltip: 'تحديث',
@@ -109,9 +111,10 @@ class _AssistantChatScreenState extends ConsumerState<AssistantChatScreen> {
       ),
       body: Column(
         children: [
-          _AssistantHeader(
+          _AssistantHero(
             subtitle:
-                'اكلي شنو تحب، وأنا أرشح لك المطاعم حسب السعر والتقييم وتاريخ طلباتك',
+                'اكتب براحتك، وأنا أرتب لك المتاجر حسب السعر والتقييم وتاريخ طلباتك.',
+            profile: state.profile,
           ),
           Expanded(
             child: state.loading
@@ -170,12 +173,11 @@ class _AssistantChatScreenState extends ConsumerState<AssistantChatScreen> {
                   ),
           ),
           _QuickPrompts(
-            onTapCheap: () => _sendPreset('أريد أرخص الخيارات المتاحة الآن'),
-            onTapTopRated: () => _sendPreset('رشحلي الأعلى تقييماً اليوم'),
-            onTapBasedHistory: () =>
-                _sendPreset('اعتمد على طلباتي السابقة واقترح شي مناسب'),
+            onTapCheap: () => _sendPreset('أريد أرخص الخيارات'),
+            onTapTopRated: () => _sendPreset('أريد أعلى تقييم'),
+            onTapBasedHistory: () => _sendPreset('اقترح لي حسب طلباتي السابقة'),
             onTapQuickDraft: () => _sendPreset(
-              'سويلي طلب سريع وجهز مسودة مباشرة',
+              'سويلي طلب جاهز بسرعة عندي ضيوف',
               createDraft: true,
             ),
           ),
@@ -193,7 +195,7 @@ class _AssistantChatScreenState extends ConsumerState<AssistantChatScreen> {
                       maxLines: 3,
                       onSubmitted: (_) => _sendCurrentMessage(),
                       decoration: const InputDecoration(
-                        hintText: 'اكتب طلبك هنا... مثال: أريد أرخص بركر',
+                        hintText: 'اكتب طلبك... مثال: بركر رخيص مع توصيل مجاني',
                       ),
                     ),
                   ),
@@ -212,25 +214,113 @@ class _AssistantChatScreenState extends ConsumerState<AssistantChatScreen> {
   }
 }
 
-class _AssistantHeader extends StatelessWidget {
+class _AssistantHero extends StatefulWidget {
   final String subtitle;
+  final Map<String, dynamic>? profile;
 
-  const _AssistantHeader({required this.subtitle});
+  const _AssistantHero({required this.subtitle, required this.profile});
+
+  @override
+  State<_AssistantHero> createState() => _AssistantHeroState();
+}
+
+class _AssistantHeroState extends State<_AssistantHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final favoriteTokensRaw = widget.profile?['favoriteTokens'];
+    final favoriteTokens = favoriteTokensRaw is List
+        ? favoriteTokensRaw
+              .map((e) => (e is Map ? e['key'] : null)?.toString() ?? '')
+              .where((e) => e.isNotEmpty)
+              .take(3)
+              .toList()
+        : const <String>[];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-      child: Card(
-        child: ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.smart_toy_outlined)),
-          title: const Text(
-            'AI BestOffer',
-            textDirection: TextDirection.rtl,
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          subtitle: Text(subtitle, textDirection: TextDirection.rtl),
-        ),
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, _) {
+          final glow = 0.08 + (_pulse.value * 0.12);
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.22),
+                  Colors.cyan.withValues(alpha: 0.16),
+                  Colors.white.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+              border: Border.all(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.38),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: glow),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      child: Icon(Icons.smart_toy_outlined),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'AI BestOffer | بسماية',
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(widget.subtitle, textDirection: TextDirection.rtl),
+                if (favoriteTokens.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: favoriteTokens
+                        .map((token) => Chip(label: Text(token)))
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -244,31 +334,71 @@ class _ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
+    final bubbleColor = isUser
+        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.24)
+        : Colors.white.withValues(alpha: 0.08);
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        constraints: const BoxConstraints(maxWidth: 320),
+        constraints: const BoxConstraints(maxWidth: 340),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: isUser
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.22)
-              : Colors.white.withValues(alpha: 0.08),
+          color: bubbleColor,
           border: Border.all(
             color: isUser
                 ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.45)
                 : Colors.white.withValues(alpha: 0.15),
           ),
         ),
-        child: Text(message.text, textDirection: TextDirection.rtl),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isUser)
+              Icon(
+                Icons.smart_toy_outlined,
+                size: 16,
+                color: Colors.cyan.shade200,
+              ),
+            if (!isUser) const SizedBox(width: 6),
+            Flexible(
+              child: Text(message.text, textDirection: TextDirection.rtl),
+            ),
+            if (isUser) const SizedBox(width: 6),
+            if (isUser)
+              Icon(
+                Icons.person_rounded,
+                size: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _TypingBubble extends StatelessWidget {
+class _TypingBubble extends StatefulWidget {
   const _TypingBubble();
+
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -282,9 +412,29 @@ class _TypingBubble extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.08),
           border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
         ),
-        child: const SizedBox(
-          width: 56,
-          child: LinearProgressIndicator(minHeight: 4),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final phase = _controller.value * math.pi * 2;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(3, (index) {
+                final shift = math.sin(phase + index * 0.9).abs();
+                final size = 5.0 + (shift * 3.5);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      color: Colors.cyan.withValues(alpha: 0.75),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                );
+              }),
+            );
+          },
         ),
       ),
     );
@@ -314,25 +464,25 @@ class _QuickPrompts extends StatelessWidget {
         children: [
           ActionChip(
             avatar: const Icon(Icons.savings_outlined, size: 16),
-            label: const Text('أرخص خيارات'),
+            label: const Text('الأرخص'),
             onPressed: onTapCheap,
           ),
           const SizedBox(width: 8),
           ActionChip(
             avatar: const Icon(Icons.star_rate_rounded, size: 16),
-            label: const Text('أعلى تقييم'),
+            label: const Text('الأعلى تقييما'),
             onPressed: onTapTopRated,
           ),
           const SizedBox(width: 8),
           ActionChip(
             avatar: const Icon(Icons.history_rounded, size: 16),
-            label: const Text('حسب طلباتي'),
+            label: const Text('من طلباتي'),
             onPressed: onTapBasedHistory,
           ),
           const SizedBox(width: 8),
           ActionChip(
             avatar: const Icon(Icons.local_shipping_rounded, size: 16),
-            label: const Text('سويلي مسودة'),
+            label: const Text('طلب سريع'),
             onPressed: onTapQuickDraft,
           ),
         ],
@@ -363,22 +513,75 @@ class _ProductSuggestionsPanel extends StatelessWidget {
             ...products
                 .take(6)
                 .map(
-                  (p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                  (p) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
+                      color: Colors.white.withValues(alpha: 0.03),
+                    ),
                     child: Row(
                       children: [
+                        _ItemImage(
+                          url: p.productImageUrl,
+                          icon: Icons.fastfood_rounded,
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            '${p.productName} • ${p.merchantName}',
-                            textDirection: TextDirection.rtl,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                p.productName,
+                                textDirection: TextDirection.rtl,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                p.merchantName,
+                                textDirection: TextDirection.rtl,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              if (p.offerLabel?.trim().isNotEmpty == true)
+                                Text(
+                                  p.offerLabel!,
+                                  textDirection: TextDirection.rtl,
+                                  style: const TextStyle(
+                                    color: Colors.amber,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          formatIqd(p.effectivePrice),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              formatIqd(p.effectivePrice),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (p.freeDelivery)
+                              const Text(
+                                'توصيل مجاني',
+                                style: TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -405,26 +608,33 @@ class _MerchantSuggestionsPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'أفضل متاجر لك',
+              'أفضل المتاجر لك',
               textDirection: TextDirection.rtl,
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 6,
-              runSpacing: 6,
-              children: merchants
-                  .take(4)
-                  .map(
-                    (m) => Chip(
-                      label: Text(
-                        '${m.merchantName} • ${m.avgRating.toStringAsFixed(1)}★',
-                      ),
+            ...merchants
+                .take(4)
+                .map(
+                  (m) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: _ItemImage(
+                      url: m.merchantImageUrl,
+                      icon: Icons.storefront_rounded,
                     ),
-                  )
-                  .toList(),
-            ),
+                    title: Text(
+                      m.merchantName,
+                      textDirection: TextDirection.rtl,
+                    ),
+                    subtitle: Text(
+                      'Rating ${m.avgRating.toStringAsFixed(1)} | ${formatIqd(m.minPrice)} - ${formatIqd(m.maxPrice)}',
+                      textDirection: TextDirection.rtl,
+                    ),
+                    trailing: m.hasFreeDelivery
+                        ? const Icon(Icons.local_shipping_rounded, size: 18)
+                        : null,
+                  ),
+                ),
           ],
         ),
       ),
@@ -474,7 +684,7 @@ class _DraftOrderCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'المجموع الفرعي: ${formatIqd(draft.subtotal)}\n'
+              'المجموع: ${formatIqd(draft.subtotal)}\n'
               'رسوم الخدمة: ${formatIqd(draft.serviceFee)}\n'
               'أجور التوصيل: ${formatIqd(draft.deliveryFee)}\n'
               'الإجمالي: ${formatIqd(draft.totalAmount)}',
@@ -491,7 +701,7 @@ class _DraftOrderCard extends StatelessWidget {
                       (a) => DropdownMenuItem(
                         value: a.id,
                         child: Text(
-                          '${a.label} • ${a.block}-${a.buildingNumber}-${a.apartment}',
+                          '${a.label} - ${a.block}-${a.buildingNumber}-${a.apartment}',
                         ),
                       ),
                     )
@@ -502,7 +712,7 @@ class _DraftOrderCard extends StatelessWidget {
             FilledButton.icon(
               onPressed: confirming ? null : onConfirm,
               icon: const Icon(Icons.check_circle_outline_rounded),
-              label: Text(confirming ? 'جارٍ التثبيت...' : 'تثبيت الطلب'),
+              label: Text(confirming ? 'جاري التأكيد...' : 'تأكيد الطلب'),
             ),
           ],
         ),
@@ -526,7 +736,7 @@ class _CreatedOrderCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'تم تثبيت الطلب #${order.id}',
+              'تم تأكيد الطلب #${order.id}',
               textDirection: TextDirection.rtl,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
@@ -543,6 +753,33 @@ class _CreatedOrderCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ItemImage extends StatelessWidget {
+  final String? url;
+  final IconData icon;
+
+  const _ItemImage({required this.url, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = url?.trim();
+    if (clean == null || clean.isEmpty) {
+      return CircleAvatar(radius: 18, child: Icon(icon, size: 18));
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.network(
+        clean,
+        width: 38,
+        height: 38,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            CircleAvatar(radius: 18, child: Icon(icon, size: 18)),
       ),
     );
   }

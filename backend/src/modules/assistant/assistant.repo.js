@@ -190,7 +190,7 @@ export async function getHistorySignals(customerUserId) {
 
   const categoryResult = await q(
     `SELECT
-       COALESCE(c.name, 'عام') AS category_name,
+       COALESCE(c.name, 'general') AS category_name,
        SUM(oi.quantity)::int AS items_count
      FROM customer_order o
      JOIN order_item oi ON oi.order_id = o.id
@@ -198,7 +198,7 @@ export async function getHistorySignals(customerUserId) {
      LEFT JOIN merchant_category c ON c.id = p.category_id
      WHERE o.customer_user_id = $1
        AND o.status <> 'cancelled'
-     GROUP BY COALESCE(c.name, 'عام')
+     GROUP BY COALESCE(c.name, 'general')
      ORDER BY items_count DESC
      LIMIT 16`,
     [Number(customerUserId)]
@@ -241,6 +241,60 @@ export async function getHistorySignals(customerUserId) {
   };
 }
 
+
+export async function getGlobalSignals() {
+  const [merchantResult, categoryResult, productResult] = await Promise.all([
+    q(
+      `SELECT
+         o.merchant_id,
+         COUNT(*)::int AS delivered_orders
+       FROM customer_order o
+       WHERE o.status = 'delivered'
+       GROUP BY o.merchant_id
+       ORDER BY delivered_orders DESC
+       LIMIT 40`
+    ),
+    q(
+      `SELECT
+         COALESCE(c.name, 'general') AS category_name,
+         SUM(oi.quantity)::int AS items_count
+       FROM customer_order o
+       JOIN order_item oi ON oi.order_id = o.id
+       LEFT JOIN product p ON p.id = oi.product_id
+       LEFT JOIN merchant_category c ON c.id = p.category_id
+       WHERE o.status = 'delivered'
+       GROUP BY COALESCE(c.name, 'general')
+       ORDER BY items_count DESC
+       LIMIT 40`
+    ),
+    q(
+      `SELECT
+         oi.product_id,
+         SUM(oi.quantity)::int AS sold_units
+       FROM customer_order o
+       JOIN order_item oi ON oi.order_id = o.id
+       WHERE o.status = 'delivered'
+       GROUP BY oi.product_id
+       ORDER BY sold_units DESC
+       LIMIT 120`
+    ),
+  ]);
+
+  return {
+    merchants: merchantResult.rows.map((row) => ({
+      merchantId: Number(row.merchant_id),
+      deliveredOrders: Number(row.delivered_orders || 0),
+    })),
+    categories: categoryResult.rows.map((row) => ({
+      categoryName: row.category_name || 'general',
+      itemsCount: Number(row.items_count || 0),
+    })),
+    products: productResult.rows.map((row) => ({
+      productId: Number(row.product_id),
+      soldUnits: Number(row.sold_units || 0),
+    })),
+  };
+}
 export async function listRecommendationPool(customerUserId, limit = 500) {
   const clampedLimit = Math.min(Math.max(Number(limit) || 500, 20), 1500);
 
@@ -515,3 +569,4 @@ export async function markDraftCancelled(draftId) {
     [Number(draftId)]
   );
 }
+

@@ -90,7 +90,10 @@ class AssistantController extends StateNotifier<AssistantState> {
     } on DioException catch (e) {
       state = state.copyWith(loading: false, error: _mapError(e));
     } catch (_) {
-      state = state.copyWith(loading: false, error: 'تعذر تحميل جلسة المساعد');
+      state = state.copyWith(
+        loading: false,
+        error: 'Failed to load assistant session',
+      );
     }
   }
 
@@ -132,7 +135,7 @@ class AssistantController extends StateNotifier<AssistantState> {
     } catch (_) {
       state = state.copyWith(
         sending: false,
-        error: 'تعذر إرسال الرسالة إلى المساعد',
+        error: 'Failed to send message to assistant',
       );
     }
   }
@@ -156,7 +159,7 @@ class AssistantController extends StateNotifier<AssistantState> {
     } on DioException catch (e) {
       state = state.copyWith(sending: false, error: _mapError(e));
     } catch (_) {
-      state = state.copyWith(sending: false, error: 'تعذر تثبيت المسودة');
+      state = state.copyWith(sending: false, error: 'Failed to confirm draft');
     }
   }
 
@@ -194,18 +197,18 @@ class AssistantController extends StateNotifier<AssistantState> {
       if (message is String && message.isNotEmpty) {
         switch (message) {
           case 'DRAFT_NOT_FOUND':
-            return 'المسودة غير موجودة أو منتهية';
+            return 'Draft not found or expired';
           case 'DRAFT_EXPIRED':
-            return 'انتهت صلاحية المسودة. أعد الطلب من المساعد';
+            return 'Draft expired. Please create a new one';
           case 'ADDRESS_REQUIRED':
-            return 'اختر عنوان توصيل قبل تثبيت الطلب';
+            return 'Select delivery address before confirmation';
           case 'MESSAGE_REQUIRED':
-            return 'اكتب رسالة أولاً';
+            return 'Type a message first';
           default:
             return message;
         }
       }
     }
-    return 'حدث خطأ أثناء الاتصال بالخادم';
+    return 'Network error while connecting to server';
   }
 }

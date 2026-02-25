@@ -56,7 +56,9 @@ class _CustomerOrdersScreenState extends ConsumerState<CustomerOrdersScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('طلباتي'),
+        title: const Text(
+          'ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ',
+        ),
         actions: const [NotificationsBellButton()],
       ),
       body: RefreshIndicator(
@@ -68,7 +70,11 @@ class _CustomerOrdersScreenState extends ConsumerState<CustomerOrdersScreen> {
             ? ListView(
                 children: const [
                   SizedBox(height: 140),
-                  Center(child: Text('لا توجد طلبات')),
+                  Center(
+                    child: Text(
+                      'Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ ÃƒËœÃ‚ÂªÃƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â¯ ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',
+                    ),
+                  ),
                 ],
               )
             : ListView.separated(
@@ -89,7 +95,10 @@ class _CustomerOrdersScreenState extends ConsumerState<CustomerOrdersScreen> {
     );
   }
 
-  List<OrderModel> _prioritizeOrders(List<OrderModel> orders, int? focusOrderId) {
+  List<OrderModel> _prioritizeOrders(
+    List<OrderModel> orders,
+    int? focusOrderId,
+  ) {
     if (focusOrderId == null) return orders;
     final list = [...orders];
     final index = list.indexWhere((o) => o.id == focusOrderId);
@@ -120,16 +129,21 @@ class _OrderCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(14),
         side: highlighted
             ? BorderSide(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.55),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.55),
               )
             : BorderSide.none,
       ),
       child: ExpansionTile(
         key: PageStorageKey('order_card_${order.id}'),
         initiallyExpanded: initiallyExpanded,
-        title: Text('طلب #${order.id} - $status', textDirection: TextDirection.rtl),
+        title: Text(
+          'ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨ #${order.id} - $status',
+          textDirection: TextDirection.rtl,
+        ),
         subtitle: Text(
-          'المتجر: ${order.merchantName} | الإجمالي: ${formatIqd(order.totalAmount)}',
+          'ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¬ÃƒËœÃ‚Â±: ${order.merchantName} | ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¥ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â : ${formatIqd(order.totalAmount)}',
           textDirection: TextDirection.rtl,
         ),
         childrenPadding: const EdgeInsets.symmetric(
@@ -147,7 +161,7 @@ class _OrderCard extends ConsumerWidget {
             Align(
               alignment: Alignment.centerRight,
               child: Text(
-                'السائق: ${order.deliveryFullName} - ${order.deliveryPhone ?? ''}',
+                'ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â³ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¦Ãƒâ„¢Ã¢â‚¬Å¡: ${order.deliveryFullName} - ${order.deliveryPhone ?? ''}',
                 textDirection: TextDirection.rtl,
               ),
             ),
@@ -157,7 +171,7 @@ class _OrderCard extends ConsumerWidget {
             Align(
               alignment: Alignment.centerRight,
               child: Text(
-                'صورة الطلب',
+                'ÃƒËœÃ‚ÂµÃƒâ„¢Ã‹â€ ÃƒËœÃ‚Â±ÃƒËœÃ‚Â© ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨',
                 textDirection: TextDirection.rtl,
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
@@ -193,10 +207,10 @@ class _OrderCard extends ConsumerWidget {
           Align(
             alignment: Alignment.centerRight,
             child: Text(
-              'المجموع الفرعي: ${formatIqd(order.subtotal)}\n'
-              'رسوم الخدمة: ${formatIqd(order.serviceFee)}\n'
-              'أجور التوصيل: ${formatIqd(order.deliveryFee)}\n'
-              'الإجمالي: ${formatIqd(order.totalAmount)}',
+              'ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¹ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚ÂÃƒËœÃ‚Â±ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â : ${formatIqd(order.subtotal)}\n'
+              'ÃƒËœÃ‚Â±ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â®ÃƒËœÃ‚Â¯Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â©: ${formatIqd(order.serviceFee)}\n'
+              'ÃƒËœÃ‚Â£ÃƒËœÃ‚Â¬Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â± ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚ÂªÃƒâ„¢Ã‹â€ ÃƒËœÃ‚ÂµÃƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾: ${formatIqd(order.deliveryFee)}\n'
+              'ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¥ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â : ${formatIqd(order.totalAmount)}',
               textDirection: TextDirection.rtl,
             ),
           ),
@@ -213,7 +227,8 @@ class _OrderCard extends ConsumerWidget {
 
                   final result = await _showRatingDialog(
                     context,
-                    title: 'تقييم المندوب',
+                    title:
+                        'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¨',
                   );
                   if (!context.mounted) return;
                   if (result != null) {
@@ -229,7 +244,9 @@ class _OrderCard extends ConsumerWidget {
 
                   await _showFirstAppRating(context, ref);
                 },
-                child: const Text('تم استلام الطلب'),
+                child: const Text(
+                  'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨',
+                ),
               ),
             ),
           if (order.status == 'delivered')
@@ -241,7 +258,9 @@ class _OrderCard extends ConsumerWidget {
                       .read(ordersControllerProvider.notifier)
                       .reorder(order.id, note: order.note);
                 },
-                child: const Text('إعادة الطلب'),
+                child: const Text(
+                  'ÃƒËœÃ‚Â¥ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â© ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨',
+                ),
               ),
             ),
           if (order.status == 'delivered' && order.deliveryRating == null)
@@ -251,7 +270,8 @@ class _OrderCard extends ConsumerWidget {
                 onPressed: () async {
                   final result = await _showRatingDialog(
                     context,
-                    title: 'تقييم الدلفري',
+                    title:
+                        'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¯Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚ÂÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ',
                   );
                   if (result == null) return;
                   await ref
@@ -262,7 +282,9 @@ class _OrderCard extends ConsumerWidget {
                         review: result.review,
                       );
                 },
-                child: const Text('تقييم الدلفري'),
+                child: const Text(
+                  'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¯Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚ÂÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ',
+                ),
               ),
             ),
           if (order.status == 'delivered' && order.merchantRating == null)
@@ -272,7 +294,7 @@ class _OrderCard extends ConsumerWidget {
                 onPressed: () async {
                   final result = await _showRatingDialog(
                     context,
-                    title: 'تقييم المتجر',
+                    title: 'تقييم التطبيق',
                   );
                   if (result == null) return;
                   await ref
@@ -283,18 +305,24 @@ class _OrderCard extends ConsumerWidget {
                         review: result.review,
                       );
                 },
-                child: const Text('تقييم المتجر'),
+                child: const Text(
+                  'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¬ÃƒËœÃ‚Â±',
+                ),
               ),
             ),
           if (order.deliveryRating != null)
             Align(
               alignment: Alignment.centerRight,
-              child: Text('تقييم المندوب: ${'⭐' * (order.deliveryRating ?? 0)}'),
+              child: Text(
+                'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¨: ${'ÃƒÂ¢Ã‚Â­Ã‚Â' * (order.deliveryRating ?? 0)}',
+              ),
             ),
           if (order.merchantRating != null)
             Align(
               alignment: Alignment.centerRight,
-              child: Text('تقييم المتجر: ${'⭐' * (order.merchantRating ?? 0)}'),
+              child: Text(
+                'ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¬ÃƒËœÃ‚Â±: ${'ÃƒÂ¢Ã‚Â­Ã‚Â' * (order.merchantRating ?? 0)}',
+              ),
             ),
           const SizedBox(height: 8),
         ],
@@ -337,7 +365,8 @@ class _OrderCard extends ConsumerWidget {
                 TextField(
                   controller: reviewCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'ملاحظة (اختياري)',
+                    labelText:
+                        'Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â­ÃƒËœÃ‚Â¸ÃƒËœÃ‚Â© (ÃƒËœÃ‚Â§ÃƒËœÃ‚Â®ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â )',
                   ),
                 ),
               ],
@@ -345,7 +374,9 @@ class _OrderCard extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('إلغاء'),
+                child: const Text(
+                  'ÃƒËœÃ‚Â¥Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚ÂºÃƒËœÃ‚Â§ÃƒËœÃ‚Â¡',
+                ),
               ),
               TextButton(
                 onPressed: () {
@@ -357,7 +388,9 @@ class _OrderCard extends ConsumerWidget {
                     ),
                   );
                 },
-                child: const Text('إرسال'),
+                child: const Text(
+                  'ÃƒËœÃ‚Â¥ÃƒËœÃ‚Â±ÃƒËœÃ‚Â³ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾',
+                ),
               ),
             ],
           );
@@ -383,7 +416,7 @@ class _OrderCard extends ConsumerWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('شكراً لتقييمك')));
+    ).showSnackBar(const SnackBar(content: Text('شكرا لتقييمك')));
   }
 }
 
@@ -397,10 +430,22 @@ class _OrderStatusTimeline extends StatelessWidget {
     final progress = _buildProgress(order);
 
     const steps = <_TimelineStep>[
-      _TimelineStep(label: 'الموافقة على الطلب', icon: Icons.verified_outlined),
-      _TimelineStep(label: 'تعيين سائق', icon: Icons.assignment_ind_outlined),
-      _TimelineStep(label: 'تحضير الطلب', icon: Icons.restaurant_menu_outlined),
-      _TimelineStep(label: 'استلم السائق الطلب', icon: Icons.two_wheeler_outlined),
+      _TimelineStep(
+        label: 'تمت الموافقة على الطلب',
+        icon: Icons.verified_outlined,
+      ),
+      _TimelineStep(
+        label: 'تم تعيين السائق',
+        icon: Icons.assignment_ind_outlined,
+      ),
+      _TimelineStep(
+        label: 'بدء تحضير الطلب',
+        icon: Icons.restaurant_menu_outlined,
+      ),
+      _TimelineStep(
+        label: 'استلم السائق الطلب',
+        icon: Icons.two_wheeler_outlined,
+      ),
       _TimelineStep(label: 'وصل السائق', icon: Icons.location_on_outlined),
       _TimelineStep(label: 'تم استلام الطلب', icon: Icons.check_circle_outline),
     ];
@@ -438,30 +483,32 @@ class _OrderStatusTimeline extends StatelessWidget {
           ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          reverse: true,
-          child: Row(
-            children: [
-              for (var i = 0; i < steps.length; i++) ...[
-                _TimelineChip(
-                  step: steps[i],
-                  done: progress.doneFlags[i] && order.status != 'cancelled',
-                  active:
-                      i == progress.activeIndex &&
-                      order.status != 'cancelled' &&
-                      !progress.doneFlags.last,
-                ),
-                if (i < steps.length - 1)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Icon(
-                      Icons.arrow_back_rounded,
-                      color: progress.doneFlags[i]
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.white54,
-                    ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Row(
+              children: [
+                for (var i = 0; i < steps.length; i++) ...[
+                  _TimelineChip(
+                    step: steps[i],
+                    done: progress.doneFlags[i] && order.status != 'cancelled',
+                    active:
+                        i == progress.activeIndex &&
+                        order.status != 'cancelled' &&
+                        !progress.doneFlags.last,
                   ),
+                  if (i < steps.length - 1)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(
+                        Icons.arrow_left_rounded,
+                        color: progress.doneFlags[i]
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white54,
+                      ),
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],
@@ -529,12 +576,15 @@ class _DeliveryEtaPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final eta = _computeEta(order, DateTime.now());
-    final title = eta.isLate
+    final awaitingPickup = order.pickedUpAt == null;
+    final title = awaitingPickup
+        ? 'بانتظار استلام السائق للطلب'
+        : eta.isLate
         ? 'السائق متأخر ${eta.lateByMinutes} دقيقة'
         : 'وقت الوصول التقديري';
     final etaText = eta.minMinutes == eta.maxMinutes
         ? '${eta.minMinutes} دقيقة'
-        : '${eta.minMinutes} - ${eta.maxMinutes} دقائق';
+        : '${eta.minMinutes} - ${eta.maxMinutes} دقيقة';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 420),
@@ -560,8 +610,10 @@ class _DeliveryEtaPanel extends StatelessWidget {
             duration: const Duration(milliseconds: 350),
             child: Text(
               key: ValueKey('$title|$etaText'),
-              eta.isLate
-                  ? 'الوقت المحدّث للوصول: $etaText'
+              awaitingPickup
+                  ? 'سيبدأ احتساب الوقت بعد استلام السائق للطلب'
+                  : eta.isLate
+                  ? 'الوقت المحدث للوصول: $etaText'
                   : 'الوصول خلال: $etaText',
               textDirection: TextDirection.rtl,
               style: const TextStyle(fontWeight: FontWeight.w700),
@@ -656,7 +708,7 @@ class _MotorcycleRoadLaneState extends State<_MotorcycleRoadLane>
                       final bounce =
                           math.sin(_floatController.value * math.pi * 2) *
                           (widget.isLate ? 1.6 : 3.0);
-                      final x = 22 + (laneWidth * animatedProgress);
+                      final x = 22 + (laneWidth * (1 - animatedProgress));
                       return Positioned(
                         left: x,
                         top: 10 + bounce,
@@ -712,26 +764,30 @@ class _EtaWindow {
 
 _TimelineProgress _buildProgress(OrderModel order) {
   final approved = order.approvedAt != null || order.status != 'pending';
-  final assignedDriver = order.deliveryUserId != null;
-  final preparing =
+  final assignedDriverRaw = order.deliveryUserId != null;
+  final preparingRaw =
       order.preparingStartedAt != null ||
-      const {'preparing', 'ready_for_delivery', 'on_the_way', 'delivered'}
-          .contains(order.status);
-  final picked =
+      const {
+        'preparing',
+        'ready_for_delivery',
+        'on_the_way',
+        'delivered',
+      }.contains(order.status);
+  final pickedRaw =
       order.pickedUpAt != null ||
       const {'on_the_way', 'delivered'}.contains(order.status);
-  final arrived =
+  final arrivedRaw =
       order.deliveredAt != null || const {'delivered'}.contains(order.status);
-  final received = order.customerConfirmedAt != null;
+  final receivedRaw = order.customerConfirmedAt != null;
 
-  final done = [
-    approved,
-    assignedDriver,
-    preparing,
-    picked,
-    arrived,
-    received,
-  ];
+  // Keep the timeline strictly sequential so stages never jump out of order.
+  final assignedDriver = approved && assignedDriverRaw;
+  final preparing = assignedDriver && preparingRaw;
+  final picked = preparing && pickedRaw;
+  final arrived = picked && arrivedRaw;
+  final received = arrived && receivedRaw;
+
+  final done = [approved, assignedDriver, preparing, picked, arrived, received];
 
   var activeIndex = 0;
   for (var i = 0; i < done.length; i++) {
@@ -744,11 +800,7 @@ _EtaWindow _computeEta(OrderModel order, DateTime now) {
   const baseMin = 7;
   const baseMax = 10;
 
-  final pickupAt =
-      order.pickedUpAt ??
-      order.preparedAt ??
-      order.preparingStartedAt ??
-      order.createdAt;
+  final pickupAt = order.pickedUpAt;
 
   if (pickupAt == null) {
     return const _EtaWindow(

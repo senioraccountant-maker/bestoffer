@@ -291,7 +291,7 @@ class AssistantAddressOptionModel {
   });
 
   String get summary =>
-      '$city - بلوك $block - عمارة $buildingNumber - شقة $apartment';
+      '$city - Block $block - Building $buildingNumber - Apt $apartment';
 
   factory AssistantAddressOptionModel.fromJson(Map<String, dynamic> j) {
     return AssistantAddressOptionModel(
