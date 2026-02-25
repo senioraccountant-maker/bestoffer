@@ -10,6 +10,47 @@ import {
 
 const FIXED_SERVICE_FEE = 500;
 const FIXED_DELIVERY_FEE = 1000;
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
+const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
+const OPENAI_TIMEOUT_MS = Math.min(
+  Math.max(Number(process.env.OPENAI_TIMEOUT_MS || 9000), 3000),
+  20000
+);
+const OPENAI_MAX_PROMPT_ITEMS = Math.min(
+  Math.max(Number(process.env.OPENAI_MAX_PROMPT_ITEMS || 6), 2),
+  12
+);
+
+const IRAQI_DIALECT_TOKEN_MAP = {
+  شنو: "ماذا",
+  شنوو: "ماذا",
+  شكد: "كم",
+  شلون: "كيف",
+  شبيك: "ما بك",
+  شبيكم: "ما بكم",
+  اكو: "يوجد",
+  ماكو: "لا يوجد",
+  انطي: "اعطي",
+  انطيك: "اعطيك",
+  اريد: "اريد",
+  اريده: "اريد",
+  اريدهه: "اريد",
+  ابيه: "اريد",
+  ابي: "اريد",
+  ابغي: "اريد",
+  ودي: "اريد",
+  خلي: "اجعل",
+  خليه: "اجعل",
+  سوي: "اعمل",
+  سويلي: "اعمل لي",
+  جيبلي: "احضر لي",
+  بركر: "برغر",
+  توصيله: "توصيل",
+  دلفري: "مندوب",
+  مندوبه: "مندوب",
+  ريد: "اريد",
+  مود: "لا",
+};
 
 const CHEAP_KEYWORDS = [
   'cheap',
@@ -59,7 +100,13 @@ const ORDER_KEYWORDS = [
   '\u0627\u0628\u064a',
   '\u0633\u0648',
   '\u0633\u0648\u064a',
+  '\u0633\u0648\u064a\u0644\u064a',
+  '\u062e\u0644\u064a',
+  '\u062e\u0644\u0647',
+  '\u062c\u0647\u0632',
   '\u062c\u064a\u0628',
+  '\u0627\u0628\u064a',
+  '\u0648\u062f\u064a',
 ];
 
 const CONFIRM_KEYWORDS = [
@@ -255,6 +302,9 @@ const RECOMMEND_KEYWORDS = [
   '\u0627\u0646\u0635\u062d\u0646\u064a',
   '\u0631\u0634\u062d\u0644\u064a',
   '\u0627\u0642\u062a\u0631\u062d',
+  '\u0634\u0646\u0648 \u062a\u0646\u0635\u062d',
+  '\u062f\u0644\u0646\u064a',
+  '\u0627\u062e\u062a\u0627\u0631\u0644\u064a',
 ];
 
 const EVALUATE_KEYWORDS = [
@@ -285,6 +335,9 @@ const MOOD_BASED_KEYWORDS = [
   '\u0634\u0646\u0648 \u0627\u0643\u0644',
   '\u0645\u0632\u0627\u062c',
   '\u0634\u0646\u0648 \u062a\u0634\u062a\u0647\u064a',
+  '\u0634\u0646\u0648 \u0645\u062a\u0648\u0641\u0631',
+  '\u0634\u0646\u0648 \u0639\u0646\u062f\u0643\u0645',
+  '\u0634\u0646\u0648 \u0632\u064a\u0646',
 ];
 
 const COMPARISON_KEYWORDS = [
@@ -424,11 +477,28 @@ function normalizeForNlp(value) {
   return normalized;
 }
 
+function normalizeDialectToken(token) {
+  const clean = String(token || "").trim();
+  if (!clean) return "";
+  return IRAQI_DIALECT_TOKEN_MAP[clean] || clean;
+}
+
+function normalizeDialectText(value) {
+  const normalized = normalizeForNlp(value);
+  if (!normalized) return "";
+  return normalized
+    .split(" ")
+    .map((part) => normalizeDialectToken(part))
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
 function tokenize(value) {
   if (!value) return [];
   return normalizeForNlp(value)
     .split(' ')
-    .map((part) => part.trim())
+    .map((part) => normalizeDialectToken(part))
     .filter((part) => part.length >= 2 && !STOPWORDS.has(part));
 }
 
@@ -707,15 +777,33 @@ function conversationCoreFilledCount(model) {
   return count;
 }
 
-function nextMissingSlot(model) {
+function listMissingSlots(model) {
   const slots = model?.slots || {};
-  if (!slots.cuisine) return "cuisine";
-  if (!slots.budgetLevel || slots.budgetLevel === "unknown") return "budget";
-  if (!slots.speedPriority || slots.speedPriority === "balanced") return "speed";
-  if (!slots.mealType || slots.mealType === "any") return "meal";
-  if (slots.peopleCount == null) return "audience";
-  if (!Array.isArray(slots.dietary) || slots.dietary.length === 0) return "dietary";
-  return null;
+  const missing = [];
+  if (!slots.cuisine) missing.push("cuisine");
+  if (!slots.budgetLevel || slots.budgetLevel === "unknown") missing.push("budget");
+  if (!slots.speedPriority || slots.speedPriority === "balanced") missing.push("speed");
+  if (!slots.mealType || slots.mealType === "any") missing.push("meal");
+  if (slots.peopleCount == null) missing.push("audience");
+  if (!Array.isArray(slots.dietary) || slots.dietary.length === 0) missing.push("dietary");
+  return missing;
+}
+
+function pickNextMissingSlot(model) {
+  const missing = listMissingSlots(model);
+  if (!missing.length) return null;
+
+  const lastSlot = model?.lastQuestionSlot || null;
+  if (!lastSlot) return missing[0];
+
+  const idx = missing.indexOf(lastSlot);
+  if (idx === -1) return missing[0];
+  if (missing.length === 1) return missing[0];
+  return missing[(idx + 1) % missing.length];
+}
+
+function nextMissingSlot(model) {
+  return listMissingSlots(model)[0] || null;
 }
 
 function decideConversationMode({ intent, model }) {
@@ -730,7 +818,12 @@ function decideConversationMode({ intent, model }) {
   const minimumSlots = intent.primaryIntent === "ORDER_DIRECT" ? 3 : 3;
   const ready = filled >= minimumSlots && model.turns >= minimumTurns;
   if (ready) return { mode: "recommendation", ready: true };
-  return { mode: "discovery", ready: false, missingSlot: nextMissingSlot(model), filled };
+  return {
+    mode: "discovery",
+    ready: false,
+    missingSlot: pickNextMissingSlot(model),
+    filled,
+  };
 }
 
 function detectPrimaryIntent(normalizedText, supportIntent) {
@@ -765,7 +858,7 @@ function extractCityAreaHints(normalizedText) {
 
 function detectIntent(message) {
   const rawMessage = String(message || "");
-  const normalized = normalizeForNlp(rawMessage);
+  const normalized = normalizeDialectText(rawMessage);
   const categoryHints = detectCategoryHints(normalized);
   const smallTalkType = detectSmallTalkType(normalized);
   const audienceType = detectAudienceType(normalized);
@@ -1583,7 +1676,7 @@ function merchantReason(intent, merchant, lang) {
 
 function pickSmartQuestion(intent, profile, lang, conversationModel = null) {
   const model = normalizeConversationModel(conversationModel || profile?.conversationModel);
-  const missingSlot = nextMissingSlot(model);
+  const missingSlot = pickNextMissingSlot(model) || nextMissingSlot(model);
   if (missingSlot) {
     return pickScenarioQuestion(
       missingSlot,
@@ -1769,6 +1862,203 @@ function summarizeRecentContext(recentMessages, lang) {
     `آخر طلبين: ${recentUser[0]} بعدها ${recentUser[1]}.`,
     `Last two requests: ${recentUser[0]}, then ${recentUser[1]}.`
   );
+}
+
+function scoreMessageRelevance(messageText, intentTokens) {
+  const tokens = tokenize(messageText);
+  if (!tokens.length) return 0;
+  const tokenSet = new Set(intentTokens || []);
+  let overlap = 0;
+  for (const token of tokens) {
+    if (tokenSet.has(token)) overlap += 1;
+  }
+  return overlap * 3 + Math.min(tokens.length, 4);
+}
+
+function buildHistoricalMemoryContext(historyMessages, intent, lang) {
+  const source = Array.isArray(historyMessages) ? historyMessages : [];
+  const userMessages = source.filter(
+    (m) =>
+      m &&
+      m.role === "user" &&
+      typeof m.text === "string" &&
+      m.text.trim().length >= 2
+  );
+  if (!userMessages.length) {
+    return { line: null, snippets: [] };
+  }
+
+  const scored = userMessages
+    .map((msg, idx) => ({
+      text: msg.text.trim(),
+      score: scoreMessageRelevance(msg.text, intent.tokens || []) + Math.max(0, 3 - idx * 0.03),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const unique = [];
+  const seen = new Set();
+  for (const row of scored) {
+    const key = normalizeForNlp(row.text).slice(0, 120);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row.text);
+    if (unique.length >= 3) break;
+  }
+
+  if (!unique.length) return { line: null, snippets: [] };
+
+  const snippets = unique.map((text) => text.slice(0, 110));
+  const line = tr(
+    lang,
+    `اعتماداً على محادثاتك السابقة: ${snippets.slice(0, 2).join(" | ")}`,
+    `Based on your previous chats: ${snippets.slice(0, 2).join(" | ")}`
+  );
+  return { line, snippets };
+}
+
+function compactLlmMerchant(merchant) {
+  return {
+    name: merchant.merchantName,
+    type: merchant.merchantType,
+    rating: Number(merchant.avgRating || 0),
+    deliveredOrders: Number(merchant.completedOrders || 0),
+    minPrice: Number(merchant.minPrice || 0),
+    maxPrice: Number(merchant.maxPrice || 0),
+    deliveryMinutes: merchant.avgDeliveryMinutes == null ? null : Number(merchant.avgDeliveryMinutes),
+    freeDelivery: merchant.hasFreeDelivery === true,
+    topProducts: (merchant.topProducts || []).slice(0, 3),
+  };
+}
+
+function compactLlmProduct(product) {
+  return {
+    merchant: product.merchantName,
+    name: product.productName,
+    price: Number(product.effectivePrice || 0),
+    basePrice: Number(product.basePrice || 0),
+    offer: product.offerLabel || null,
+    category: product.categoryName || null,
+    freeDelivery: product.freeDelivery === true,
+    rating: Number(product.merchantAvgRating || 0),
+  };
+}
+
+function buildLlmSystemPrompt(lang) {
+  if (lang === "en") {
+    return [
+      "You are Souqi in-app ordering assistant for Bismayah.",
+      "Reply naturally, warmly, and practically.",
+      "Use app data only. Never invent unavailable restaurants, offers, or ETA.",
+      "When data is missing, ask one smart follow-up question only.",
+      "Do not push ordering too early; understand the user first.",
+      "If user is off-topic, answer briefly then gently return to ordering help.",
+      "Keep answer concise (2-6 lines), no markdown.",
+    ].join(" ");
+  }
+
+  return [
+    "أنت مساعد تطبيق سوقي داخل بسماية.",
+    "ردك يكون طبيعي ولهجة عراقية بسيطة ومريحة.",
+    "لا تخترع عروض أو مطاعم أو أوقات توصيل غير موجودة بالبيانات.",
+    "إذا البيانات ناقصة اسأل سؤال ذكي واحد فقط.",
+    "لا تدفع المستخدم للطلب بسرعة؛ افهمه أولاً ثم اقترح.",
+    "إذا المستخدم خارج الموضوع جاوبه باختصار ثم ارجعه بلطف لطلب الأكل.",
+    "الإجابة قصيرة وواضحة من 2 إلى 6 أسطر وبدون تنسيق ماركداون.",
+  ].join(" ");
+}
+
+async function maybeBuildOpenAiReply({
+  intent,
+  profile,
+  lang,
+  recentContext,
+  historicalMemory,
+  merchants,
+  products,
+  conversationDecision,
+  draft,
+  createdOrder,
+}) {
+  if (!OPENAI_API_KEY) return null;
+
+  const payload = {
+    userMessage: intent.originalText,
+    intent: {
+      primary: intent.primaryIntent,
+      support: intent.supportIntent,
+      offTopic: intent.offTopicIntent,
+      comparison: intent.comparisonIntent,
+      wantsCheap: intent.wantsCheap,
+      wantsFast: intent.wantsFast,
+      wantsTopRated: intent.wantsTopRated,
+      budgetIqd: intent.budgetIqd,
+      categoryHints: intent.categoryHints,
+    },
+    conversationMode: conversationDecision?.mode || "unknown",
+    profile: {
+      city: profile.city || null,
+      area: profile.area || null,
+      budgetLevel: profile.budgetLevel || "unknown",
+      speedPriority: profile.speedPriority || "balanced",
+      qualityPriority: profile.qualityPriority || "balanced",
+      preferredCuisines: (profile.preferredCuisines || []).slice(0, 6),
+    },
+    recentContext,
+    historicalMemory: historicalMemory?.snippets || [],
+    merchants: (merchants || []).slice(0, OPENAI_MAX_PROMPT_ITEMS).map(compactLlmMerchant),
+    products: (products || []).slice(0, OPENAI_MAX_PROMPT_ITEMS).map(compactLlmProduct),
+    draft: draft
+      ? {
+          merchant: draft.merchantName,
+          totalAmount: Number(draft.totalAmount || 0),
+          items: (draft.items || []).slice(0, 4).map((item) => ({
+            name: item.productName,
+            quantity: Number(item.quantity || 1),
+            lineTotal: Number(item.lineTotal || 0),
+          })),
+        }
+      : null,
+    createdOrder: createdOrder
+      ? {
+          id: Number(createdOrder.id),
+          status: createdOrder.status,
+          merchant: createdOrder.merchantName,
+          totalAmount: Number(createdOrder.totalAmount || 0),
+        }
+      : null,
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        temperature: 0.65,
+        max_tokens: 500,
+        messages: [
+          { role: "system", content: buildLlmSystemPrompt(lang) },
+          { role: "user", content: JSON.stringify(payload) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+    const json = await response.json();
+    const content = String(json?.choices?.[0]?.message?.content || "").trim();
+    if (!content) return null;
+    return content.slice(0, 1800);
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildRecommendationLines(merchants, intent, lang) {
@@ -2070,6 +2360,7 @@ function buildIntentAwareReply({
   confirmFromDraft,
   profile,
   recentContext,
+  historicalMemoryLine = null,
   merchantCatalog = [],
   conversationModel = null,
   conversationDecision = null,
@@ -2100,7 +2391,7 @@ function buildIntentAwareReply({
   }
 
   if (intent.offTopicIntent || intent.smallTalkType !== "none") {
-    return buildSmallTalkReply({
+    const smallTalk = buildSmallTalkReply({
       intent,
       profile,
       merchants,
@@ -2109,6 +2400,10 @@ function buildIntentAwareReply({
       conversationDecision,
       lang,
     });
+    if (historicalMemoryLine) {
+      return `${smallTalk}\n${historicalMemoryLine}`;
+    }
+    return smallTalk;
   }
 
   if (conversationDecision?.mode === "discovery") {
@@ -2160,14 +2455,20 @@ function buildIntentAwareReply({
       lang,
       "ما حصلت مطابقة قوية هسه. إذا تحددلي النوع أو الميزانية أضبطها بسرعة.",
       "I could not find strong matches yet. I can improve results fast if you set budget or food type."
-    )} ${pickSmartQuestion(intent, profile, lang)}`;
+    )} ${historicalMemoryLine ? `\n${historicalMemoryLine}` : ""} ${pickSmartQuestion(
+      intent,
+      profile,
+      lang,
+      conversationModel
+    )}`;
   }
 
   const contextLine = recentContext ? `${recentContext}\n` : "";
+  const memoryLine = historicalMemoryLine ? `${historicalMemoryLine}\n` : "";
   const lines = buildRecommendationLines(merchants, intent, lang);
   const intro = tr(lang, "رتبتلك أفضل 3 خيارات:", "I ranked the top 3 options for your request:");
-  const followUp = pickSmartQuestion(intent, profile, lang);
-  return `${contextLine}${intro}\n${lines.join("\n")}\n${followUp}`;
+  const followUp = pickSmartQuestion(intent, profile, lang, conversationModel);
+  return `${contextLine}${memoryLine}${intro}\n${lines.join("\n")}\n${followUp}`;
 }
 
 function buildAssistantReply(args) {
@@ -2725,12 +3026,20 @@ export async function chat(customerUserId, dto) {
     });
   }
 
-  const [rawProfile, historySignals, globalSignals, pool, recentMessages] = await Promise.all([
+  const [
+    rawProfile,
+    historySignals,
+    globalSignals,
+    pool,
+    recentMessages,
+    historicalMessages,
+  ] = await Promise.all([
     repo.getProfile(customerUserId),
     repo.getHistorySignals(customerUserId),
     repo.getGlobalSignals(),
     repo.listRecommendationPool(customerUserId, 900),
     repo.listMessages(session.id, 12),
+    repo.listRecentMessagesAcrossSessions(customerUserId, 120),
   ]);
 
   const profile = mergeProfileSignals(parseProfile(rawProfile), intent);
@@ -2749,6 +3058,11 @@ export async function chat(customerUserId, dto) {
     historyWeights,
   });
   const recentContext = summarizeRecentContext(recentMessages, lang);
+  const historicalMemory = buildHistoricalMemoryContext(
+    historicalMessages,
+    intent,
+    lang
+  );
 
   const merchantSuggestions = buildMerchantSuggestions(ranked);
   const productSuggestions = buildProductSuggestions(ranked);
@@ -2826,7 +3140,7 @@ export async function chat(customerUserId, dto) {
     profile.conversationModel.recommendationTurns += 1;
   }
 
-  const assistantText = buildAssistantReply({
+  const ruleBasedReply = buildAssistantReply({
     intent,
     merchants: visibleMerchants,
     products: visibleProducts,
@@ -2835,11 +3149,26 @@ export async function chat(customerUserId, dto) {
     confirmFromDraft: false,
     profile,
     recentContext,
+    historicalMemoryLine: historicalMemory.line,
     merchantCatalog: merchantSuggestions,
     conversationModel: profile.conversationModel,
     conversationDecision,
     lang,
   });
+
+  const llmReply = await maybeBuildOpenAiReply({
+    intent,
+    profile,
+    lang,
+    recentContext,
+    historicalMemory,
+    merchants: visibleMerchants,
+    products: visibleProducts,
+    conversationDecision,
+    draft: createdDraft,
+    createdOrder: null,
+  });
+  const assistantText = llmReply || ruleBasedReply;
 
   const summaryText = buildConversationSummaryText({
     intent,
@@ -2896,6 +3225,7 @@ export async function chat(customerUserId, dto) {
     productsCount: visibleProducts.length,
     conversationPhase: profile.conversationModel?.phase || "discovery",
     conversationMode: conversationDecision.mode,
+    llmUsed: llmReply != null,
     scenarioLibrarySize: getScenarioLibrarySize(),
     language: lang,
     CUSTOMER_PROFILE_UPDATE: artifacts.customerProfileUpdate,

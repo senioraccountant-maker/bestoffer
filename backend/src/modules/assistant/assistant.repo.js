@@ -147,6 +147,34 @@ export async function listMessages(sessionId, limit = 40) {
   return result.rows.map(mapMessage);
 }
 
+export async function listRecentMessagesAcrossSessions(customerUserId, limit = 120) {
+  const clampedLimit = Math.min(Math.max(Number(limit) || 120, 20), 400);
+  const result = await q(
+    `SELECT
+       m.id,
+       m.session_id,
+       m.role,
+       m.text,
+       m.metadata,
+       m.created_at
+     FROM ai_chat_message m
+     JOIN ai_chat_session s ON s.id = m.session_id
+     WHERE s.customer_user_id = $1
+     ORDER BY m.id DESC
+     LIMIT $2`,
+    [Number(customerUserId), clampedLimit]
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    sessionId: Number(row.session_id),
+    role: row.role,
+    text: row.text,
+    metadata: row.metadata || null,
+    createdAt: row.created_at,
+  }));
+}
+
 export async function getProfile(customerUserId) {
   const result = await q(
     `SELECT customer_user_id, preference_json, last_summary, created_at, updated_at

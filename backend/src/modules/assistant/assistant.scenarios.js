@@ -89,60 +89,97 @@ const TRACK_QUESTIONS = {
     ar: [
       "تميل اليوم لشرقي لو غربي؟",
       "تحب مشاوي، برغر، بيتزا، لو أكل خفيف؟",
+      "شنو مزاجك اليوم: عراقي، إيطالي، سريع، لو خفيف؟",
+      "تحب نروح على مطاعم مجربة لو نجرب شي جديد؟",
+      "تفضّل أكل بيتي وطعم تقليدي لو شي غربي سريع؟",
+      "تحب يكون الأكل حار لو عادي؟",
     ],
     en: [
       "Do you prefer Eastern or Western today?",
       "Would you like grills, burgers, pizza, or lighter food?",
+      "What is your mood today: Iraqi, Italian, fast food, or light meals?",
+      "Would you prefer trusted places or a new experience?",
+      "Do you prefer spicy food or regular?",
     ],
   },
   budget: {
     ar: [
       "شكد ميزانيتك تقريباً بالدينار؟",
       "تحبها اقتصادية لو عادي لو فخمة؟",
+      "تحب أخلي السلة ضمن مبلغ معين؟",
+      "تقريباً كم تريد تدفع للطلب كامل؟",
+      "نركّز على الأرخص حتى لو الخيارات أقل؟",
     ],
     en: [
       "What is your approximate budget in IQD?",
       "Do you prefer budget, medium, or premium options?",
+      "Do you want me to keep the basket under a target amount?",
+      "How much do you want to spend for the full order?",
+      "Should I prioritize the cheapest options even with fewer choices?",
     ],
   },
   speed: {
     ar: [
       "الأولوية عندك السرعة لو السعر؟",
       "تريد أسرع توصيل حتى لو أغلى شوي؟",
+      "مستعجل لو عادي إذا التوصيل أخذ وقت أكثر؟",
+      "تحب توصيل قريب وسريع لو سعر أقل حتى لو أبعد؟",
+      "نرتبها على أسرع وصول لو أفضل قيمة؟",
     ],
     en: [
       "Is your priority speed or price?",
       "Do you want fastest delivery even if slightly higher price?",
+      "Are you in a hurry, or is extra delivery time okay?",
+      "Do you want nearby fast delivery or lower price with longer time?",
+      "Should I optimize for fastest arrival or best value?",
     ],
   },
   meal: {
     ar: [
       "الطلب فطور لو غداء لو عشاء؟",
       "مزاجك وجبة دسمة لو خفيفة؟",
+      "الطلب إلك وحدك لو للجمعه؟",
+      "تحب وجبة رئيسية لو سناك سريع؟",
+      "تحب نضيف مشروب أو حلو ويا الوجبة؟",
     ],
     en: [
       "Is this for breakfast, lunch, or dinner?",
       "Do you want a heavy meal or a light one?",
+      "Is this for you only or for a group?",
+      "Do you want a full meal or a quick snack?",
+      "Would you like a drink or dessert with it?",
     ],
   },
   audience: {
     ar: [
       "الطلب لشخص واحد لو للعائلة؟",
       "كم شخص تقريباً حتى أضبط الكمية؟",
+      "عدكم ضيوف اليوم؟ حتى أرتب كميات مناسبة.",
+      "تحب وجبات فردية لو صواني مشاركة؟",
+      "تريد كمية تشبع الكل لو خيارات منوعة أكثر؟",
     ],
     en: [
       "Is this for one person or family?",
       "How many people approximately?",
+      "Do you have guests today so I can size portions correctly?",
+      "Do you prefer individual meals or sharing platters?",
+      "Should we prioritize larger portions or more variety?",
     ],
   },
   dietary: {
     ar: [
       "عندك حساسية أو نظام غذائي معين؟",
       "تحب بدون لحم أو خيارات صحية اليوم؟",
+      "في مكونات ما تريدها نهائياً؟",
+      "تحب نركز على أكل صحي وسعرات أقل؟",
+      "تريد خيارات نباتية أو بدون غلوتين؟",
     ],
     en: [
       "Do you have any allergy or dietary requirement?",
       "Would you like no-meat or healthier choices today?",
+      "Any ingredients you want me to avoid completely?",
+      "Should I focus on healthier, lower-calorie options?",
+      "Do you need vegetarian or gluten-free options?",
     ],
   },
 };
