@@ -355,6 +355,26 @@ export async function ensureSchema() {
     `);
 
     await q(`
+      CREATE TABLE IF NOT EXISTS user_push_token (
+        id           BIGSERIAL PRIMARY KEY,
+        user_id      BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        push_token   TEXT NOT NULL UNIQUE,
+        platform     VARCHAR(24),
+        app_version  VARCHAR(48),
+        device_model VARCHAR(120),
+        is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await q(`
+      CREATE INDEX IF NOT EXISTS idx_user_push_token_user_active
+      ON user_push_token (user_id, is_active);
+    `);
+
+    await q(`
       CREATE TABLE IF NOT EXISTS customer_address (
         id               BIGSERIAL PRIMARY KEY,
         customer_user_id BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,

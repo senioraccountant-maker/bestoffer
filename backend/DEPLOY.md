@@ -84,3 +84,56 @@ Set these in Railway service variables if you want stronger AI chat quality:
 - `OPENAI_FREQUENCY_PENALTY=0.45`
 - `OPENAI_ASSISTANT_NAME=سوقي`
 - `OPENAI_LANGUAGE_LOCK=true`
+
+## 8) Firebase + Railway push setup (required for notifications outside app)
+
+### A) Firebase project
+1. Create a Firebase project.
+2. Add Android app with package name exactly matching:
+   - `android/app/build.gradle.kts` -> `applicationId`
+3. Download `google-services.json` and place it in:
+   - `android/app/google-services.json`
+
+### B) Firebase service account for backend
+1. Firebase Console -> Project Settings -> Service Accounts.
+2. Generate new private key JSON (download file).
+3. Convert it to Railway variables:
+```bash
+cd backend
+npm run firebase:env -- ./path/to/service-account.json
+```
+4. Copy `FIREBASE_SERVICE_ACCOUNT_BASE64=...` to Railway service variables.
+   - This is the recommended single-variable setup.
+
+### C) Railway variables checklist
+Required:
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `FIREBASE_SERVICE_ACCOUNT_BASE64`
+
+Recommended:
+- `RUN_SQL_MIGRATIONS=true`
+- `DEV_SEED_ADMIN=false` (for production)
+- `CORS_ORIGINS=https://YOUR_APP_DOMAIN`
+
+### D) Deploy + verify
+1. Redeploy backend on Railway.
+2. Verify service health:
+```bash
+curl https://bestoffer-production.up.railway.app/health
+```
+3. Login from app, then verify push config and token registration:
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://bestoffer-production.up.railway.app/api/notifications/push-status
+```
+Expected:
+- `"configured": true`
+- `"activeTokens"` should be `>= 1` after login on device
+
+### E) Device test
+1. Build and install app on real phone (not emulator only).
+2. Login on two accounts/devices.
+3. Trigger event (new order/status update) and verify:
+   - notification arrives when app is foreground/background/terminated
+   - notification has sound

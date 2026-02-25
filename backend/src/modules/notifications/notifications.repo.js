@@ -1,5 +1,10 @@
+import admin from "firebase-admin";
+
 import { q } from "../../config/db.js";
 import { emitToUser } from "../../shared/realtime/live-events.js";
+
+let firebaseInitAttempted = false;
+let firebaseMessaging = null;
 
 function toNotificationRow(row) {
   if (!row) return null;
@@ -7,6 +12,220 @@ function toNotificationRow(row) {
     ...row,
     payload: row.payload || null,
   };
+}
+
+function normalizeServiceAccount(parsed, source) {
+  if (!parsed || typeof parsed !== "object") return null;
+  if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+    return null;
+  }
+
+  return {
+    projectId: String(parsed.project_id).trim(),
+    clientEmail: String(parsed.client_email).trim(),
+    privateKey: String(parsed.private_key).replace(/\\n/g, "\n"),
+    source,
+  };
+}
+
+function parseServiceAccountJson(raw, source, { silent = false } = {}) {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const normalized = normalizeServiceAccount(parsed, source);
+    if (normalized) return normalized;
+    if (!silent) {
+      console.error(`Firebase service account JSON missing required keys (${source}).`);
+    }
+    return null;
+  } catch (e) {
+    if (!silent) {
+      console.error(`Invalid Firebase service account JSON (${source})`, e);
+    }
+    return null;
+  }
+}
+
+function readFirebaseServiceAccount({ silent = false } = {}) {
+  const jsonRaw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const fromJson = parseServiceAccountJson(jsonRaw, "json", { silent });
+  if (fromJson) return fromJson;
+
+  const base64Raw = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  if (base64Raw && base64Raw.trim()) {
+    try {
+      const decoded = Buffer.from(base64Raw.trim(), "base64").toString("utf8");
+      const fromBase64 = parseServiceAccountJson(decoded, "base64", { silent });
+      if (fromBase64) return fromBase64;
+    } catch (e) {
+      if (!silent) {
+        console.error("Invalid FIREBASE_SERVICE_ACCOUNT_BASE64", e);
+      }
+    }
+  }
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    ? String(process.env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, "\n")
+    : null;
+
+  if (!projectId || !clientEmail || !privateKey) return null;
+  return {
+    projectId: String(projectId).trim(),
+    clientEmail: String(clientEmail).trim(),
+    privateKey,
+    source: "split",
+  };
+}
+
+function currentConfiguredSource() {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim()) return "json";
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim()) return "base64";
+  if (
+    process.env.FIREBASE_PROJECT_ID?.trim() ||
+    process.env.FIREBASE_CLIENT_EMAIL?.trim() ||
+    process.env.FIREBASE_PRIVATE_KEY?.trim()
+  ) {
+    return "split";
+  }
+  return null;
+}
+
+function splitEnvMissingKeys() {
+  const missing = [];
+  if (!process.env.FIREBASE_PROJECT_ID?.trim()) missing.push("FIREBASE_PROJECT_ID");
+  if (!process.env.FIREBASE_CLIENT_EMAIL?.trim()) missing.push("FIREBASE_CLIENT_EMAIL");
+  if (!process.env.FIREBASE_PRIVATE_KEY?.trim()) missing.push("FIREBASE_PRIVATE_KEY");
+  return missing;
+}
+
+export function getPushConfigStatus() {
+  const serviceAccount = readFirebaseServiceAccount({ silent: true });
+  const source = serviceAccount?.source || currentConfiguredSource();
+  return {
+    configured: !!serviceAccount,
+    source,
+    firebaseInitAttempted,
+    firebaseInitialized: !!firebaseMessaging,
+    missingSplitKeys:
+      source === "split" || source === null ? splitEnvMissingKeys() : [],
+  };
+}
+
+function getFirebaseMessaging() {
+  if (firebaseMessaging) return firebaseMessaging;
+  if (firebaseInitAttempted) return null;
+  firebaseInitAttempted = true;
+
+  const serviceAccount = readFirebaseServiceAccount();
+  if (!serviceAccount) return null;
+
+  try {
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: serviceAccount.projectId,
+          clientEmail: serviceAccount.clientEmail,
+          privateKey: serviceAccount.privateKey,
+        }),
+      });
+    }
+    firebaseMessaging = admin.messaging();
+  } catch (e) {
+    console.error("Failed to initialize Firebase Admin", e);
+    firebaseMessaging = null;
+  }
+
+  return firebaseMessaging;
+}
+
+function isDeadTokenError(code) {
+  return (
+    code === "messaging/registration-token-not-registered" ||
+    code === "messaging/invalid-registration-token" ||
+    code === "messaging/invalid-argument"
+  );
+}
+
+async function deactivatePushTokensByValue(tokens = []) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return;
+  await q(
+    `UPDATE user_push_token
+     SET is_active = FALSE,
+         updated_at = NOW()
+     WHERE push_token = ANY($1::text[])`,
+    [tokens]
+  );
+}
+
+async function dispatchPushNotification(notification) {
+  const messaging = getFirebaseMessaging();
+  if (!messaging) return;
+
+  const userId = Number(notification.user_id ?? notification.userId);
+  if (!Number.isFinite(userId) || userId <= 0) return;
+
+  const tokens = await listActivePushTokens(userId);
+  if (!tokens.length) return;
+
+  const orderId =
+    notification.order_id ??
+    notification.orderId ??
+    notification.payload?.orderId ??
+    null;
+
+  const message = {
+    tokens,
+    notification: {
+      title: String(notification.title || "BestOffer"),
+      body: String(notification.body || "لديك إشعار جديد"),
+    },
+    data: {
+      notificationId: String(notification.id || ""),
+      type: String(notification.type || ""),
+      orderId: orderId == null ? "" : String(orderId),
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "bestoffer_live_updates",
+        sound: "default",
+        clickAction: "FLUTTER_NOTIFICATION_CLICK",
+      },
+    },
+    apns: {
+      headers: { "apns-priority": "10" },
+      payload: {
+        aps: {
+          sound: "default",
+        },
+      },
+    },
+  };
+
+  const response = await messaging.sendEachForMulticast(message);
+  if (response.failureCount <= 0) return;
+
+  const staleTokens = [];
+  for (let i = 0; i < response.responses.length; i += 1) {
+    const result = response.responses[i];
+    if (result.success) continue;
+    const code = result.error?.code;
+    if (isDeadTokenError(code)) {
+      staleTokens.push(tokens[i]);
+    }
+  }
+
+  if (staleTokens.length) {
+    await deactivatePushTokensByValue(staleTokens);
+  }
+}
+
+function queuePushNotification(notification) {
+  dispatchPushNotification(notification).catch((e) => {
+    console.error("Failed to send push notification", e);
+  });
 }
 
 export async function createNotification({
@@ -39,6 +258,7 @@ export async function createNotification({
   const notification = toNotificationRow(r.rows[0]);
   if (notification) {
     emitToUser(Number(userId), "notification", { notification });
+    queuePushNotification(notification);
   }
   return notification;
 }
@@ -123,4 +343,70 @@ export async function markAllNotificationsRead(userId) {
   }
 
   return out;
+}
+
+export async function upsertPushToken({
+  userId,
+  token,
+  platform = null,
+  appVersion = null,
+  deviceModel = null,
+}) {
+  const cleanToken = String(token || "").trim();
+  if (!cleanToken) return null;
+
+  const r = await q(
+    `INSERT INTO user_push_token
+      (user_id, push_token, platform, app_version, device_model, is_active, last_seen_at)
+     VALUES ($1,$2,$3,$4,$5,TRUE,NOW())
+     ON CONFLICT (push_token)
+     DO UPDATE
+       SET user_id = EXCLUDED.user_id,
+           platform = COALESCE(EXCLUDED.platform, user_push_token.platform),
+           app_version = COALESCE(EXCLUDED.app_version, user_push_token.app_version),
+           device_model = COALESCE(EXCLUDED.device_model, user_push_token.device_model),
+           is_active = TRUE,
+           last_seen_at = NOW(),
+           updated_at = NOW()
+     RETURNING *`,
+    [
+      Number(userId),
+      cleanToken,
+      platform ? String(platform).trim().slice(0, 24) : null,
+      appVersion ? String(appVersion).trim().slice(0, 48) : null,
+      deviceModel ? String(deviceModel).trim().slice(0, 120) : null,
+    ]
+  );
+
+  return r.rows[0] || null;
+}
+
+export async function deactivatePushToken(userId, token) {
+  const cleanToken = String(token || "").trim();
+  if (!cleanToken) return false;
+
+  const r = await q(
+    `UPDATE user_push_token
+     SET is_active = FALSE,
+         updated_at = NOW()
+     WHERE user_id = $1
+       AND push_token = $2`,
+    [Number(userId), cleanToken]
+  );
+  return (r.rowCount || 0) > 0;
+}
+
+export async function listActivePushTokens(userId) {
+  const r = await q(
+    `SELECT push_token
+     FROM user_push_token
+     WHERE user_id = $1
+       AND is_active = TRUE
+     ORDER BY last_seen_at DESC`,
+    [Number(userId)]
+  );
+
+  return r.rows
+    .map((row) => String(row.push_token || "").trim())
+    .filter(Boolean);
 }

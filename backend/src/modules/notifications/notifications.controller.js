@@ -40,6 +40,33 @@ export async function markAllRead(req, res, next) {
   }
 }
 
+export async function registerPushToken(req, res, next) {
+  try {
+    await service.registerPushToken(req.userId, req.body || {});
+    res.status(204).send();
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function unregisterPushToken(req, res, next) {
+  try {
+    await service.unregisterPushToken(req.userId, req.body || {});
+    res.status(204).send();
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function pushStatus(req, res, next) {
+  try {
+    const out = await service.pushStatus(req.userId);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+}
+
 export function stream(req, res, next) {
   try {
     res.status(200);

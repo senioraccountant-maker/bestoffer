@@ -30,3 +30,40 @@ export async function markRead(userId, notificationId) {
 export async function markAllRead(userId) {
   return repo.markAllNotificationsRead(userId);
 }
+
+export async function registerPushToken(userId, body) {
+  const token = String(body?.token || "").trim();
+  if (!token) {
+    const err = new Error("PUSH_TOKEN_REQUIRED");
+    err.status = 400;
+    throw err;
+  }
+
+  await repo.upsertPushToken({
+    userId,
+    token,
+    platform: body?.platform || null,
+    appVersion: body?.appVersion || null,
+    deviceModel: body?.deviceModel || null,
+  });
+}
+
+export async function unregisterPushToken(userId, body) {
+  const token = String(body?.token || "").trim();
+  if (!token) {
+    const err = new Error("PUSH_TOKEN_REQUIRED");
+    err.status = 400;
+    throw err;
+  }
+
+  await repo.deactivatePushToken(userId, token);
+}
+
+export async function pushStatus(userId) {
+  const base = repo.getPushConfigStatus();
+  const activeTokens = await repo.listActivePushTokens(userId);
+  return {
+    ...base,
+    activeTokens: activeTokens.length,
+  };
+}
